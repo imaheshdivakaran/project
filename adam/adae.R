@@ -23,7 +23,7 @@ ae <- convert_blanks_to_na(ae)
 
 adae <-derive_vars_merged(dataset = ae,dataset_add = adsl,
                           by_vars = vars(STUDYID, USUBJID)) %>%
-  derive_vars_dt(new_vars_prefix = "AE",dtc = AEENDTC)
+  derive_vars_dt(new_vars_prefix = "AEN",dtc = AEENDTC)
 
 
 
