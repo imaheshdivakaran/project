@@ -114,4 +114,9 @@ adae <-derive_vars_merged(dataset = ae,
     filter = TRTEMFL == "Y") %>%
   select(USUBJID,AEBODSYS,AESEV,ASTDT,AESEQ,AOCC03FL)
 
-
+install.packages("usethis")
+install.packages("devtools")
+usethis::use_git_config(user.name= "your useraname",user.email= "mail id")
+usethis::use_git()
+usethis::create_github_token()
+gitcreds::gitcreds_set()
