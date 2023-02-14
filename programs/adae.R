@@ -9,8 +9,6 @@ library(admiral)
 library(dplyr)
 library(tidyr)
 library(stringr)
-library(metacore)
-library(metatools)
 library(xportr)
 library(readxl)
 
@@ -96,7 +94,7 @@ adae_1 <-derive_vars_merged(dataset = ae,
       order = vars(USUBJID,desc(AESEV), ASTDT, AESEQ),
       new_var = AOCC02FL,
       mode = "first"),
-    filter = !is.na(AETERM)) %>%
+    filter = TRTEMFL == "Y") %>%
 # Derive 1st Occurrence 03 Flag for Serious SOC
   restrict_derivation(
     derivation = derive_var_extreme_flag,
