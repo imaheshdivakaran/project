@@ -4,6 +4,7 @@
 #
 # Input: adsl, ae
 
+# Adding required libraries
 library(haven)
 library(admiral)
 library(dplyr)
@@ -14,13 +15,10 @@ library(readxl)
 
 
 # Loading requred datasets
-
 ae <- read_xpt("sdtm/ae.xpt")
-suppae <- read_xpt("sdtm/ae.xpt")
 adsl <- read_xpt("adam/adsl.xpt")
 
 # Convert blanks to NA
-
 ae <- convert_blanks_to_na(ae)
 
 # Merge with ADSL and creating variables
@@ -35,8 +33,7 @@ adae_1 <-derive_vars_merged(dataset = ae,
   derive_vars_dt(dtc = AESTDTC,
                  new_vars_prefix = "AST",
                  highest_imputation = "M",
-                 min_dates = vars(TRTSDT)
-  ) %>%
+                 min_dates = vars(TRTSDT)) %>%
 # Creating Day variables
   derive_vars_dy(reference_date = TRTSDT,
                  source_vars = vars(ASTDT, AENDT)) %>%
@@ -122,7 +119,7 @@ adae_1 <-derive_vars_merged(dataset = ae,
                          str_detect(AEDECOD,'COLD SWEAT')|
                          str_detect(AEDECOD,'HYPERHIDROSIS')|
                          str_detect(AEDECOD,'ALOPECIA')),"DERMATOLOGIC EVENTS",NA)) %>%
-  # Derive 1st Occurrence 04 Flag for CQ01
+# Derive 1st Occurrence 04 Flag for CQ01
   restrict_derivation(
     derivation = derive_var_extreme_flag,
     args = params(
@@ -132,18 +129,20 @@ adae_1 <-derive_vars_merged(dataset = ae,
       mode = "first"),
     filter = !is.na(CQ01NAM))
 
-#filtering variable tab of adae of spec
+# Reading Spec for ADAE and extract variables and their corresponding labels
 spec <- read_excel(file.path("./metadata","specs.xlsx"),"Variables") %>%
   filter(Dataset == "ADAE")
 
-#===============label for pc============
+# Selecting required variables and arranging
 adae <- adae_1 %>%
   select(spec$Variable) %>%
   arrange(USUBJID, AETERM, ASTDT, AESEQ)
 
-#applying labels
+# Applying labels
 Labels <- spec[match(names(adae), spec$Variable),]$Label
 
+# Applying labels
 attr(adae, "variable.labels") <- Labels
 
+# Converting to XPT
 xportr_write(adae, "./adam/adae.xpt")
