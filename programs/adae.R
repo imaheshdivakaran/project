@@ -166,6 +166,3 @@ attr(adae, "variable.labels") <- Labels
 
 # Converting to XPT
 xportr_write(adae, "./adam/adae.xpt")
-
-# dir <- tempdir() # Change to whichever directory you want to save the dataset in
-# saveRDS(adae, file = file.path("./adam", "adae.rds"), compress = "bzip2")
