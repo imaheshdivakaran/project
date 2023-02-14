@@ -7,16 +7,35 @@
 # Adding required libraries
 library(haven)
 library(admiral)
+library(admiral.test)
 library(dplyr)
 library(tidyr)
 library(stringr)
 library(xportr)
 library(readxl)
+library(fmtr)
 
+formats
+armn <- value(condition(x=="Placebo",0),
+                 condition(x=="Xanomeline High Dose",81),
+                 condition(x=="Xanomeline Low Dose",54))
+
+racen <- value(condition(x=="AMERICAN INDIAN OR ALASKA NATIVE",1),
+               condition(x=="ASIAN",2),
+               condition(x=="BLACK OR AFRICAN AMERICAN",3),
+               condition(x=="NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER",5),
+               condition(x=="WHITE",6))
+
+agen <- value(condition(x=="18-64",2),
+              condition(x==">=65",3),
+              condition(x=="<18",1))
 
 # Loading requred datasets
-ae <- read_xpt("sdtm/ae.xpt")
-adsl <- read_xpt("adam/adsl.xpt")
+data("admiral_ae")
+data("admiral_adsl")
+
+adsl <- admiral_adsl
+ae <- admiral_ae
 
 # Convert blanks to NA
 ae <- convert_blanks_to_na(ae)
@@ -26,6 +45,7 @@ ae <- convert_blanks_to_na(ae)
 adae_1 <-derive_vars_merged(dataset = ae,
                           dataset_add = adsl,
                           by_vars = vars(STUDYID, USUBJID)) %>%
+  filter(ARM!="Screen Failure") %>%
 # Deriving AESTDTC
   derive_vars_dt(new_vars_prefix = "AEN",
                  dtc = AEENDTC) %>%
@@ -45,9 +65,9 @@ adae_1 <-derive_vars_merged(dataset = ae,
                        out_unit = "days") %>%
 # Deriving Treatment variables
   mutate(TRTA=TRT01A,
-         TRTP=TRT01P,
-         TRTAN=TRT01AN,
-         TRTPN=TRT01PN) %>%
+         TRTAN=fapply(TRTA,armn),
+         RACEN=fapply(RACE,racen),
+         AGEGR1N=fapply(AGEGR1,agen)) %>%
 # Deriving Treatment Emergent Flag
   derive_var_trtemfl(
     new_var = TRTEMFL,
@@ -146,3 +166,6 @@ attr(adae, "variable.labels") <- Labels
 
 # Converting to XPT
 xportr_write(adae, "./adam/adae.xpt")
+
+# dir <- tempdir() # Change to whichever directory you want to save the dataset in
+# saveRDS(adae, file = file.path("./adam", "adae.rds"), compress = "bzip2")
