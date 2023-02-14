@@ -8,9 +8,12 @@ library(haven)
 library(admiral)
 library(dplyr)
 library(tidyr)
+library(stringr)
 library(metacore)
 library(metatools)
 library(xportr)
+library(readxl)
+
 
 # Loading requred datasets
 
@@ -24,7 +27,7 @@ ae <- convert_blanks_to_na(ae)
 
 # Merge with ADSL and creating variables
 
-adae <-derive_vars_merged(dataset = ae,
+adae_1 <-derive_vars_merged(dataset = ae,
                           dataset_add = adsl,
                           by_vars = vars(STUDYID, USUBJID)) %>%
 # Deriving AESTDTC
@@ -71,8 +74,8 @@ adae <-derive_vars_merged(dataset = ae,
   restrict_derivation(
     derivation = derive_var_extreme_flag,
     args = params(
-      by_vars = vars(USUBJID,AEBODSYS),
-      order = vars(USUBJID,AEBODSYS, ASTDT, AESEQ),
+      by_vars = vars(USUBJID,AESOC),
+      order = vars(USUBJID,AESOC, ASTDT, AESEQ),
       new_var = AOCCSFL,
       mode = "first"),
     filter = TRTEMFL == "Y") %>%
@@ -93,7 +96,7 @@ adae <-derive_vars_merged(dataset = ae,
       order = vars(USUBJID,desc(AESEV), ASTDT, AESEQ),
       new_var = AOCC02FL,
       mode = "first"),
-    filter = TRTEMFL == "Y") %>%
+    filter = !is.na(AETERM)) %>%
 # Derive 1st Occurrence 03 Flag for Serious SOC
   restrict_derivation(
     derivation = derive_var_extreme_flag,
@@ -112,6 +115,37 @@ adae <-derive_vars_merged(dataset = ae,
       new_var = AOCC04FL,
       mode = "first"),
     filter = TRTEMFL == "Y") %>%
-  select(USUBJID,AEBODSYS,AESEV,ASTDT,AESEQ,AOCC03FL)
+# Deriving CQ01NAM
+  mutate(CQ01NAM=ifelse((str_detect(AEDECOD,'APPLICATION')|
+                         str_detect(AEDECOD,'DERMATITIS')|
+                         str_detect(AEDECOD,'ERYTHEMA')|
+                         str_detect(AEDECOD,'BLISTER')|
+                         str_detect(AEBODSYS,"SKIN AND SUBC UTANEOUS TISSUE DISORDERS"))&!(
+                         str_detect(AEDECOD,'COLD SWEAT')|
+                         str_detect(AEDECOD,'HYPERHIDROSIS')|
+                         str_detect(AEDECOD,'ALOPECIA')),"DERMATOLOGIC EVENTS",NA)) %>%
+  # Derive 1st Occurrence 04 Flag for CQ01
+  restrict_derivation(
+    derivation = derive_var_extreme_flag,
+    args = params(
+      by_vars = vars(USUBJID,CQ01NAM),
+      order = vars(USUBJID,CQ01NAM,ASTDT, AESEQ),
+      new_var = AOCC01FL,
+      mode = "first"),
+    filter = !is.na(CQ01NAM))
 
+#filtering variable tab of adae of spec
+spec <- read_excel(file.path("./metadata","specs.xlsx"),"Variables") %>%
+  filter(Dataset == "ADAE")
 
+#===============label for pc============
+adae <- adae_1 %>%
+  select(spec$Variable) %>%
+  arrange(USUBJID, AETERM, ASTDT, AESEQ)
+
+#applying labels
+Labels <- spec[match(names(adae), spec$Variable),]$Label
+
+attr(adae, "variable.labels") <- Labels
+
+xportr_write(adae, "./adam/adae.xpt")
