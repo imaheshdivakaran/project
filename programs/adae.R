@@ -167,6 +167,6 @@ adae<-adae_1 %>%
   xportr_format(adae_spec$var_spec %>%
                   mutate_at(c("format"), ~ replace_na(., "")), "ADAE") %>%
   xportr_write("adam/adae.xpt",
-               label = "Adverse Events Dataset"
+               label = "Adverse Events Analysis Dataset"
   )
 
