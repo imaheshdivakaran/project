@@ -31,11 +31,21 @@ agen <- value(condition(x=="18-64",2),
               condition(x=="<18",1))
 
 # Loading requred datasets
-data("admiral_ae")
-data("admiral_adsl")
+# data("admiral_ae")
+# data("admiral_adsl")
+#
+# adsl <- admiral_adsl
+# ae <- admiral_ae
 
-adsl <- admiral_adsl
-ae <- admiral_ae
+ae <- haven::read_xpt(file.path("sdtm", "ae.xpt"))
+adsl <- haven::read_xpt(file.path("adam", "adsl.xpt"))
+
+# placeholder for origin=predecessor, use metatool::build_from_derived()
+metacore <- spec_to_metacore("metadata/specs.xlsx", where_sep_sheet = FALSE)
+
+# Iterate spec for ADVS
+adae_spec <- metacore %>%
+  select_dataset("ADAE")
 
 # Convert blanks to NA
 ae <- convert_blanks_to_na(ae)
@@ -64,10 +74,10 @@ adae_1 <-derive_vars_merged(dataset = ae,
                        end_date = AENDT,
                        out_unit = "days") %>%
 # Deriving Treatment variables
-  mutate(TRTA=TRT01A,
-         TRTAN=fapply(TRTA,armn),
-         RACEN=fapply(RACE,racen),
-         AGEGR1N=fapply(AGEGR1,agen)) %>%
+  mutate(TRTA=TRT01A,TRTAN=TRT01AN) %>%
+         # TRTAN=fapply(TRTA,armn),
+         # RACEN=fapply(RACE,racen),
+         # AGEGR1N=fapply(AGEGR1,agen)) %>%
 # Deriving Treatment Emergent Flag
   derive_var_trtemfl(
     new_var = TRTEMFL,
@@ -147,22 +157,16 @@ adae_1 <-derive_vars_merged(dataset = ae,
       order = vars(USUBJID,CQ01NAM,ASTDT, AESEQ),
       new_var = AOCC01FL,
       mode = "first"),
-    filter = !is.na(CQ01NAM)&TRTEMFL == "Y")
-
-# Reading Spec for ADAE and extract variables and their corresponding labels
-spec <- read_excel(file.path("./metadata","specs.xlsx"),"Variables") %>%
-  filter(Dataset == "ADAE")
-
-# Selecting required variables and arranging
-adae <- adae_1 %>%
-  select(spec$Variable) %>%
+    filter = !is.na(CQ01NAM)&TRTEMFL == "Y") %>%
   arrange(USUBJID, AETERM, ASTDT, AESEQ)
 
-# Applying labels
-Labels <- spec[match(names(adae), spec$Variable),]$Label
+adae<-adae_1 %>%
+  drop_unspec_vars(adae_spec) %>% # only keep vars from define
+  order_cols(adae_spec) %>% # order columns based on define
+  set_variable_labels(adae_spec) %>% # apply variable labels based on define
+  xportr_format(adae_spec$var_spec %>%
+                  mutate_at(c("format"), ~ replace_na(., "")), "ADAE") %>%
+  xportr_write("adam/adae.xpt",
+               label = "Adverse Events Dataset"
+  )
 
-# Applying labels
-attr(adae, "variable.labels") <- Labels
-
-# Converting to XPT
-xportr_write(adae, "./adam/adae.xpt")
