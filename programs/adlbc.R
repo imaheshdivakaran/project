@@ -14,8 +14,16 @@ library(metatools)
 library(stringr)
 library(xportr)
 
-dm <- haven::read_xpt(file.path("sdtm", "dm.xpt"))
+
 lb <- haven::read_xpt(file.path("sdtm", "lb.xpt"))
 adsl <- haven::read_xpt(file.path("adam", "adsl.xpt"))
 
+# Convert blanks to NA
+lb <- convert_blanks_to_na(lb)
+
+# Merge with ADSL and creating variables
+
+adlb <-derive_vars_merged(dataset = lb,
+                            dataset_add = adsl,
+                            by_vars = vars(STUDYID, USUBJID))
 
