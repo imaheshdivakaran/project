@@ -9,4 +9,4 @@ library(xportr)
 dm <- read_xpt("sdtm/dm.xpt")
 ex <- read_xpt("sdtm/ex.xpt")
 
-xportr_write(adsl, "./adam/adsl.xpt")
+xportr_write(adae, "./adam/adae.xpt")
