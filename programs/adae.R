@@ -84,7 +84,7 @@ adae_1 <-derive_vars_merged(dataset = ae,
       order = vars(USUBJID, ASTDT, AESEQ),
       new_var = AOCCFL,
       mode = "first"),
-    filter = !is.na(AETERM)) %>%
+    filter = TRTEMFL == "Y") %>%
 # Derive 1st Occurrence of SOC Flag
   restrict_derivation(
     derivation = derive_var_extreme_flag,
@@ -135,7 +135,7 @@ adae_1 <-derive_vars_merged(dataset = ae,
                          str_detect(AEDECOD,'DERMATITIS')|
                          str_detect(AEDECOD,'ERYTHEMA')|
                          str_detect(AEDECOD,'BLISTER')|
-                         str_detect(AEBODSYS,"SKIN AND SUBC UTANEOUS TISSUE DISORDERS"))&!(
+                         str_detect(AEBODSYS,"SKIN AND SUBCUTANEOUS TISSUE DISORDERS"))&!(
                          str_detect(AEDECOD,'COLD SWEAT')|
                          str_detect(AEDECOD,'HYPERHIDROSIS')|
                          str_detect(AEDECOD,'ALOPECIA')),"DERMATOLOGIC EVENTS",NA)) %>%
@@ -147,7 +147,7 @@ adae_1 <-derive_vars_merged(dataset = ae,
       order = vars(USUBJID,CQ01NAM,ASTDT, AESEQ),
       new_var = AOCC01FL,
       mode = "first"),
-    filter = !is.na(CQ01NAM))
+    filter = !is.na(CQ01NAM)&TRTEMFL == "Y")
 
 # Reading Spec for ADAE and extract variables and their corresponding labels
 spec <- read_excel(file.path("./metadata","specs.xlsx"),"Variables") %>%
