@@ -160,6 +160,7 @@ adae_1 <-derive_vars_merged(dataset = ae,
     filter = !is.na(CQ01NAM)&TRTEMFL == "Y") %>%
   arrange(USUBJID, AETERM, ASTDT, AESEQ)
 
+# Adding labels and selecting required variables from metadata
 adae<-adae_1 %>%
   drop_unspec_vars(adae_spec) %>% # only keep vars from define
   order_cols(adae_spec) %>% # order columns based on define
