@@ -2,6 +2,8 @@
 #
 # Label: Adverse Events Analysis Dataset
 #
+# Author: Bimal Thomas
+#
 # Input: adsl, ae
 
 # Adding required libraries
@@ -12,13 +14,14 @@ library(tidyr)
 library(stringr)
 library(xportr)
 
+# Loading Datsets
 ae <- haven::read_xpt(file.path("sdtm", "ae.xpt"))
 adsl <- haven::read_xpt(file.path("adam", "adsl.xpt"))
 
 # placeholder for origin=predecessor, use metatool::build_from_derived()
-metacore <- spec_to_metacore("metadata/specs.xlsx", where_sep_sheet = FALSE)
+metacore <- spec_to_metacore("metadata/specs.xlsx",where_sep_sheet = FALSE)
 
-# Iterate spec for ADVS
+# Iterate spec for ADAE
 adae_spec <- metacore %>%
   select_dataset("ADAE")
 
@@ -26,30 +29,34 @@ adae_spec <- metacore %>%
 ae <- convert_blanks_to_na(ae)
 
 # Merge with ADSL and creating variables
-
 adae_1 <-derive_vars_merged(dataset = ae,
                           dataset_add = adsl,
                           by_vars = vars(STUDYID, USUBJID)) %>%
   filter(ARM!="Screen Failure") %>%
+
 # Deriving AESTDTC
   derive_vars_dt(new_vars_prefix = "AEN",
                  dtc = AEENDTC) %>%
+
 # Deriving AEENDTC
   derive_vars_dt(dtc = AESTDTC,
                  new_vars_prefix = "AST",
                  highest_imputation = "D",
                  min_dates = vars(TRTSDT)) %>%
+
 # Creating Day variables
   derive_vars_dy(reference_date = TRTSDT,
                  source_vars = vars(ASTDT, AENDT)) %>%
   mutate(AESTDT=as.Date(AESTDTC),
          AEENDT=as.Date(AEENDTC)) %>%
+
 # Deriving Duration variable
   derive_vars_duration(new_var = ADURN,
                        new_var_unit = ADURU,
                        start_date = AESTDT,
                        end_date = AEENDT,
                        out_unit = "days") %>%
+
 # Deriving Treatment variables
   mutate(TRTA=TRT01A,TRTAN=TRT01AN,
          # RACEN=case_when(RACE=="AMERICAN INDIAN OR ALASKA NATIVE"~1,
@@ -59,6 +66,7 @@ adae_1 <-derive_vars_merged(dataset = ae,
          #                 RACE=="WHITE"~6,
          #                 TRUE~NA),
          ADURU=ifelse(ADURU=="DAYS","DAY","")) %>%
+
 # Deriving Treatment Emergent Flag
   derive_var_trtemfl(
     new_var = TRTEMFL,
@@ -66,7 +74,10 @@ adae_1 <-derive_vars_merged(dataset = ae,
     end_date = AENDT,
     trt_start_date = TRTSDT,
     trt_end_date = TRTEDT) %>%
+
+# TRTEMFL not required for partial dates(need to confirm)
   mutate(TRTEMFL=ifelse(is.na(ASTDT),NA,TRTEMFL)) %>%
+
 # Derive 1st Occurrence of Any AE Flag
   restrict_derivation(
     derivation = derive_var_extreme_flag,
@@ -76,6 +87,7 @@ adae_1 <-derive_vars_merged(dataset = ae,
       new_var = AOCCFL,
       mode = "first"),
     filter = TRTEMFL == "Y") %>%
+
 # Derive 1st Occurrence of SOC Flag
   restrict_derivation(
     derivation = derive_var_extreme_flag,
@@ -85,6 +97,7 @@ adae_1 <-derive_vars_merged(dataset = ae,
       new_var = AOCCSFL,
       mode = "first"),
     filter = TRTEMFL == "Y") %>%
+
 # Derive 1st Occurrence of Preferred Term Flag
   restrict_derivation(
     derivation = derive_var_extreme_flag,
@@ -94,17 +107,17 @@ adae_1 <-derive_vars_merged(dataset = ae,
       new_var = AOCCPFL,
       mode = "first"),
     filter = TRTEMFL == "Y") %>%
-# Derive 1st Occurrence 02 Flag for Serious
-  restrict_derivation(
-    derivation = derive_var_extreme_flag,
-    args = params(
-      by_vars = vars(USUBJID),
-      order = vars(USUBJID,desc(AESEV), ASTDT, AESEQ),
-      new_var = AOCC02FL,
-      mode = "first"),
-    filter = TRTEMFL == "Y") %>%
 
-# Derive 1st Occurrence 03 Flag for Serious SOC
+# # Derive 1st Occurrence 02 Flag for Serious
+#   restrict_derivation(
+#     derivation = derive_var_extreme_flag,
+#     args = params(
+#       by_vars = vars(USUBJID),
+#       order = vars(USUBJID,desc(AESEV), ASTDT, AESEQ),
+#       new_var = AOCC02FL,
+#       mode = "first"),
+#     filter = TRTEMFL == "Y") %>%
+# # Derive 1st Occurrence 03 Flag for Serious SOC
 #   restrict_derivation(
 #     derivation = derive_var_extreme_flag,
 #     args = params(
@@ -122,9 +135,12 @@ adae_1 <-derive_vars_merged(dataset = ae,
 #       new_var = AOCC04FL,
 #       mode = "first"),
 #     filter = TRTEMFL == "Y") %>%
-# mutate(AOCC02FL="",
-#        AOCC03FL="",
-#        AOCC04FL="") %>%
+
+# For checking purpose
+mutate(AOCC02FL="",
+       AOCC03FL="",
+       AOCC04FL="") %>%
+
 # Deriving CQ01NAM
   mutate(CQ01NAM=ifelse((str_detect(AEDECOD,'APPLICATION')|
                          str_detect(AEDECOD,'DERMATITIS')|
@@ -134,6 +150,7 @@ adae_1 <-derive_vars_merged(dataset = ae,
                          str_detect(AEDECOD,'COLD SWEAT')|
                          str_detect(AEDECOD,'HYPERHIDROSIS')|
                          str_detect(AEDECOD,'ALOPECIA')),"DERMATOLOGIC EVENTS",NA)) %>%
+
 # Derive 1st Occurrence 04 Flag for CQ01
   restrict_derivation(
     derivation = derive_var_extreme_flag,
@@ -147,12 +164,14 @@ adae_1 <-derive_vars_merged(dataset = ae,
 
 # Adding labels and selecting required variables from metadata
 adae<-adae_1 %>%
-  drop_unspec_vars(adae_spec) %>% # only keep vars from define
-  order_cols(adae_spec) %>% # order columns based on define
-  set_variable_labels(adae_spec) %>% # apply variable labels based on define
+# only keep vars from define
+  drop_unspec_vars(adae_spec) %>%
+# order columns based on define
+  order_cols(adae_spec) %>%
+# apply variable labels based on define
+  set_variable_labels(adae_spec) %>%
   xportr_format(adae_spec$var_spec %>%
                   mutate_at(c("format"), ~ replace_na(., "")), "ADAE") %>%
-  xportr_write("adam/adae.xpt",
-               label = "Adverse Events Analysis Dataset"
-  )
+# Creating .XPT and adding dataset Label
+  xportr_write("adam/adae.xpt",label = "Adverse Events Analysis Dataset")
 
