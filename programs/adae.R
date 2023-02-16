@@ -37,7 +37,7 @@ adae_1 <-derive_vars_merged(dataset = ae,
 # Deriving AEENDTC
   derive_vars_dt(dtc = AESTDTC,
                  new_vars_prefix = "AST",
-                 highest_imputation = "Y",
+                 highest_imputation = "D",
                  min_dates = vars(TRTSDT)) %>%
 # Creating Day variables
   derive_vars_dy(reference_date = TRTSDT,
