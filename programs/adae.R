@@ -63,8 +63,8 @@ adae_1 <-derive_vars_merged(dataset = ae,
     start_date = ASTDT,
     end_date = AENDT,
     trt_start_date = TRTSDT,
-    trt_end_date = TRTEDT,
-    end_window = NULL) %>%
+    trt_end_date = TRTEDT) %>%
+  mutate(TRTEMFL=ifelse(is.na(ASTDT),NA,TRTEMFL)) %>%
 # Derive 1st Occurrence of Any AE Flag
   restrict_derivation(
     derivation = derive_var_extreme_flag,
