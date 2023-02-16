@@ -14,6 +14,12 @@ library(metatools)
 library(stringr)
 library(xportr)
 
+# placeholder for origin=predecessor, use metatool::build_from_derived()
+metacore <- spec_to_metacore("metadata/specs.xlsx", where_sep_sheet = FALSE)
+
+# Iterate spec for ADVS
+adlbc_spec <- metacore %>%
+  select_dataset("ADLBC")
 
 lb <- haven::read_xpt(file.path("sdtm", "lb.xpt"))
 adsl <- haven::read_xpt(file.path("adam", "adsl.xpt"))
