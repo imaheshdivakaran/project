@@ -42,11 +42,13 @@ adae_1 <-derive_vars_merged(dataset = ae,
 # Creating Day variables
   derive_vars_dy(reference_date = TRTSDT,
                  source_vars = vars(ASTDT, AENDT)) %>%
+  mutate(AESTDT=as.Date(AESTDTC),
+         AEENDT=as.Date(AEENDTC)) %>%
 # Deriving Duration variable
   derive_vars_duration(new_var = ADURN,
                        new_var_unit = ADURU,
-                       start_date = ASTDT,
-                       end_date = AENDT,
+                       start_date = AESTDT,
+                       end_date = AEENDT,
                        out_unit = "days") %>%
 # Deriving Treatment variables
   mutate(TRTA=TRT01A,TRTAN=TRT01AN,
@@ -92,15 +94,16 @@ adae_1 <-derive_vars_merged(dataset = ae,
       new_var = AOCCPFL,
       mode = "first"),
     filter = TRTEMFL == "Y") %>%
-# # Derive 1st Occurrence 02 Flag for Serious
-#   restrict_derivation(
-#     derivation = derive_var_extreme_flag,
-#     args = params(
-#       by_vars = vars(USUBJID),
-#       order = vars(USUBJID,desc(AESEV), ASTDT, AESEQ),
-#       new_var = AOCC02FL,
-#       mode = "first"),
-#     filter = TRTEMFL == "Y") %>%
+# Derive 1st Occurrence 02 Flag for Serious
+  restrict_derivation(
+    derivation = derive_var_extreme_flag,
+    args = params(
+      by_vars = vars(USUBJID),
+      order = vars(USUBJID,desc(AESEV), ASTDT, AESEQ),
+      new_var = AOCC02FL,
+      mode = "first"),
+    filter = TRTEMFL == "Y") %>%
+
 # Derive 1st Occurrence 03 Flag for Serious SOC
 #   restrict_derivation(
 #     derivation = derive_var_extreme_flag,
@@ -119,9 +122,9 @@ adae_1 <-derive_vars_merged(dataset = ae,
 #       new_var = AOCC04FL,
 #       mode = "first"),
 #     filter = TRTEMFL == "Y") %>%
-mutate(AOCC02FL="",
-       AOCC03FL="",
-       AOCC04FL="") %>%
+# mutate(AOCC02FL="",
+#        AOCC03FL="",
+#        AOCC04FL="") %>%
 # Deriving CQ01NAM
   mutate(CQ01NAM=ifelse((str_detect(AEDECOD,'APPLICATION')|
                          str_detect(AEDECOD,'DERMATITIS')|
@@ -149,7 +152,7 @@ adae<-adae_1 %>%
   set_variable_labels(adae_spec) %>% # apply variable labels based on define
   xportr_format(adae_spec$var_spec %>%
                   mutate_at(c("format"), ~ replace_na(., "")), "ADAE") %>%
-  xportr_write("adam/ADAE.xpt",
+  xportr_write("adam/adae.xpt",
                label = "Adverse Events Analysis Dataset"
   )
 
