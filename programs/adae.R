@@ -7,35 +7,10 @@
 # Adding required libraries
 library(haven)
 library(admiral)
-library(admiral.test)
 library(dplyr)
 library(tidyr)
 library(stringr)
 library(xportr)
-library(readxl)
-library(fmtr)
-
-formats
-armn <- value(condition(x=="Placebo",0),
-                 condition(x=="Xanomeline High Dose",81),
-                 condition(x=="Xanomeline Low Dose",54))
-
-racen <- value(condition(x=="AMERICAN INDIAN OR ALASKA NATIVE",1),
-               condition(x=="ASIAN",2),
-               condition(x=="BLACK OR AFRICAN AMERICAN",3),
-               condition(x=="NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER",5),
-               condition(x=="WHITE",6))
-
-agen <- value(condition(x=="18-64",2),
-              condition(x==">=65",3),
-              condition(x=="<18",1))
-
-# Loading requred datasets
-# data("admiral_ae")
-# data("admiral_adsl")
-#
-# adsl <- admiral_adsl
-# ae <- admiral_ae
 
 ae <- haven::read_xpt(file.path("sdtm", "ae.xpt"))
 adsl <- haven::read_xpt(file.path("adam", "adsl.xpt"))
@@ -62,7 +37,7 @@ adae_1 <-derive_vars_merged(dataset = ae,
 # Deriving AEENDTC
   derive_vars_dt(dtc = AESTDTC,
                  new_vars_prefix = "AST",
-                 highest_imputation = "M",
+                 highest_imputation = "Y",
                  min_dates = vars(TRTSDT)) %>%
 # Creating Day variables
   derive_vars_dy(reference_date = TRTSDT,
@@ -74,10 +49,14 @@ adae_1 <-derive_vars_merged(dataset = ae,
                        end_date = AENDT,
                        out_unit = "days") %>%
 # Deriving Treatment variables
-  mutate(TRTA=TRT01A,TRTAN=TRT01AN) %>%
-         # TRTAN=fapply(TRTA,armn),
-         # RACEN=fapply(RACE,racen),
-         # AGEGR1N=fapply(AGEGR1,agen)) %>%
+  mutate(TRTA=TRT01A,TRTAN=TRT01AN,
+         # RACEN=case_when(RACE=="AMERICAN INDIAN OR ALASKA NATIVE"~1,
+         #                 RACE=="ASIAN"~2,
+         #                 RACE=="BLACK OR AFRICAN AMERICAN"~3,
+         #                 RACE=="NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER"~5,
+         #                 RACE=="WHITE"~6,
+         #                 TRUE~NA),
+         ADURU=ifelse(ADURU=="DAYS","DAY","")) %>%
 # Deriving Treatment Emergent Flag
   derive_var_trtemfl(
     new_var = TRTEMFL,
@@ -113,33 +92,36 @@ adae_1 <-derive_vars_merged(dataset = ae,
       new_var = AOCCPFL,
       mode = "first"),
     filter = TRTEMFL == "Y") %>%
-# Derive 1st Occurrence 02 Flag for Serious
-  restrict_derivation(
-    derivation = derive_var_extreme_flag,
-    args = params(
-      by_vars = vars(USUBJID),
-      order = vars(USUBJID,desc(AESEV), ASTDT, AESEQ),
-      new_var = AOCC02FL,
-      mode = "first"),
-    filter = TRTEMFL == "Y") %>%
+# # Derive 1st Occurrence 02 Flag for Serious
+#   restrict_derivation(
+#     derivation = derive_var_extreme_flag,
+#     args = params(
+#       by_vars = vars(USUBJID),
+#       order = vars(USUBJID,desc(AESEV), ASTDT, AESEQ),
+#       new_var = AOCC02FL,
+#       mode = "first"),
+#     filter = TRTEMFL == "Y") %>%
 # Derive 1st Occurrence 03 Flag for Serious SOC
-  restrict_derivation(
-    derivation = derive_var_extreme_flag,
-    args = params(
-      by_vars = vars(USUBJID,AEBODSYS),
-      order = vars(USUBJID,AEBODSYS,desc(AESEV), ASTDT, AESEQ),
-      new_var = AOCC03FL,
-      mode = "first"),
-    filter = TRTEMFL == "Y") %>%
-# Derive 1st Occurrence 04 Flag for Serious PT
-  restrict_derivation(
-    derivation = derive_var_extreme_flag,
-    args = params(
-      by_vars = vars(USUBJID,AEBODSYS,AEDECOD),
-      order = vars(USUBJID,AEBODSYS,AEDECOD,desc(AESEV), ASTDT, AESEQ),
-      new_var = AOCC04FL,
-      mode = "first"),
-    filter = TRTEMFL == "Y") %>%
+#   restrict_derivation(
+#     derivation = derive_var_extreme_flag,
+#     args = params(
+#       by_vars = vars(USUBJID,AEBODSYS),
+#       order = vars(USUBJID,AEBODSYS,desc(AESEV), ASTDT, AESEQ),
+#       new_var = AOCC03FL,
+#       mode = "first"),
+#     filter = TRTEMFL == "Y") %>%
+# # Derive 1st Occurrence 04 Flag for Serious PT
+#   restrict_derivation(
+#     derivation = derive_var_extreme_flag,
+#     args = params(
+#       by_vars = vars(USUBJID,AEBODSYS,AEDECOD),
+#       order = vars(USUBJID,AEBODSYS,AEDECOD,desc(AESEV), ASTDT, AESEQ),
+#       new_var = AOCC04FL,
+#       mode = "first"),
+#     filter = TRTEMFL == "Y") %>%
+mutate(AOCC02FL="",
+       AOCC03FL="",
+       AOCC04FL="") %>%
 # Deriving CQ01NAM
   mutate(CQ01NAM=ifelse((str_detect(AEDECOD,'APPLICATION')|
                          str_detect(AEDECOD,'DERMATITIS')|
@@ -167,7 +149,7 @@ adae<-adae_1 %>%
   set_variable_labels(adae_spec) %>% # apply variable labels based on define
   xportr_format(adae_spec$var_spec %>%
                   mutate_at(c("format"), ~ replace_na(., "")), "ADAE") %>%
-  xportr_write("adam/adae.xpt",
+  xportr_write("adam/ADAE.xpt",
                label = "Adverse Events Analysis Dataset"
   )
 
