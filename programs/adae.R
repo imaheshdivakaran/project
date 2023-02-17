@@ -108,38 +108,35 @@ adae_1 <-derive_vars_merged(dataset = ae,
       mode = "first"),
     filter = TRTEMFL == "Y") %>%
 
-# # Derive 1st Occurrence 02 Flag for Serious
-#   restrict_derivation(
-#     derivation = derive_var_extreme_flag,
-#     args = params(
-#       by_vars = vars(USUBJID),
-#       order = vars(USUBJID,desc(AESEV), ASTDT, AESEQ),
-#       new_var = AOCC02FL,
-#       mode = "first"),
-#     filter = TRTEMFL == "Y") %>%
-# # Derive 1st Occurrence 03 Flag for Serious SOC
-#   restrict_derivation(
-#     derivation = derive_var_extreme_flag,
-#     args = params(
-#       by_vars = vars(USUBJID,AEBODSYS),
-#       order = vars(USUBJID,AEBODSYS,desc(AESEV), ASTDT, AESEQ),
-#       new_var = AOCC03FL,
-#       mode = "first"),
-#     filter = TRTEMFL == "Y") %>%
-# # Derive 1st Occurrence 04 Flag for Serious PT
-#   restrict_derivation(
-#     derivation = derive_var_extreme_flag,
-#     args = params(
-#       by_vars = vars(USUBJID,AEBODSYS,AEDECOD),
-#       order = vars(USUBJID,AEBODSYS,AEDECOD,desc(AESEV), ASTDT, AESEQ),
-#       new_var = AOCC04FL,
-#       mode = "first"),
-#     filter = TRTEMFL == "Y") %>%
+# Derive 1st Occurrence 02 Flag for Serious
+  restrict_derivation(
+    derivation = derive_var_extreme_flag,
+    args = params(
+      by_vars = vars(USUBJID),
+      order = vars(USUBJID,desc(AESEV), ASTDT, AESEQ),
+      new_var = AOCC02FL,
+      mode = "first"),
+    filter = TRTEMFL == "Y"&AESER=="Y") %>%
 
-# For checking purpose
-mutate(AOCC02FL="",
-       AOCC03FL="",
-       AOCC04FL="") %>%
+# Derive 1st Occurrence 03 Flag for Serious SOC
+  restrict_derivation(
+    derivation = derive_var_extreme_flag,
+    args = params(
+      by_vars = vars(USUBJID,AEBODSYS),
+      order = vars(USUBJID,AEBODSYS, ASTDT, AESEQ),
+      new_var = AOCC03FL,
+      mode = "first"),
+    filter = TRTEMFL == "Y"&AESER=="Y") %>%
+
+# Derive 1st Occurrence 04 Flag for Serious PT
+  restrict_derivation(
+    derivation = derive_var_extreme_flag,
+    args = params(
+      by_vars = vars(USUBJID,AEBODSYS,AEDECOD),
+      order = vars(USUBJID,AEBODSYS,AEDECOD, ASTDT, AESEQ),
+      new_var = AOCC04FL,
+      mode = "first"),
+    filter = TRTEMFL == "Y"&AESER=="Y") %>%
 
 # Deriving CQ01NAM
   mutate(CQ01NAM=ifelse((str_detect(AEDECOD,'APPLICATION')|
@@ -159,7 +156,7 @@ mutate(AOCC02FL="",
       order = vars(USUBJID,CQ01NAM,ASTDT, AESEQ),
       new_var = AOCC01FL,
       mode = "first"),
-    filter = !is.na(CQ01NAM)&TRTEMFL == "Y") %>%
+    filter = (CQ01NAM=="DERMATOLOGIC EVENTS")&TRTEMFL == "Y") %>%
   arrange(USUBJID, AETERM, ASTDT, AESEQ)
 
 # Adding labels and selecting required variables from metadata
