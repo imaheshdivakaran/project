@@ -64,7 +64,12 @@ adad_1 <-derive_vars_merged(dataset = qs,
                   source_var = AVAL,
                   new_var = BASE) %>%
   derive_var_chg() %>%
-  derive_var_pchg()
+  derive_var_pchg() %>%
+
+  ad_test <- adad_1 %>%
+  create_var_from_codelist(adadas_spec, AVISIT, AVISITN)
+
+  create_var_from_codelist(adad_1,adadas_spec, PARAM, PARAMN,decode_to_code = TRUE)
 
 # creating all dataset with paramcd "ACTOT" with all combination of AVISIT
 adadas_expected_obsv <- tibble::tribble(
@@ -80,14 +85,13 @@ adad_2 <- adad_1 %>%
                       by_vars = vars(STUDYID, USUBJID, PARAMCD),
                       order = vars(AVISITN, AVISIT))
 
-## derive AWRANGE/AWTARGET/AWTDIFF/AWLO/AWHI/AWU
+## derive AWRANGE/AWTARGET/AWTDIFF/AWLO/AWHI/AWU as per SAP
 aw_vars <- tribble(
   ~AVISIT, ~AWRANGE, ~AWTARGET, ~AWLO, ~AWHI,
   "Baseline", "<=1", 1, NA_integer_, 1,
   "Week 8", "2-84", 56, 2, 84,
   "Week 16", "85-140", 112, 85, 140,
-  "Week 24", ">140", 168, 141, NA_integer_
-)
+  "Week 24", ">140", 168, 141, NA_integer_)
 
 # merging
 adad_3 <- derive_vars_merged(dataset=adad_2,
@@ -104,10 +108,8 @@ adad_4 <- adad_3 %>%
       by_vars = vars(USUBJID, PARAMCD, AVISIT),
       order = vars(AWTDIFF, diff),
       new_var = ANL01FL,
-      mode = "first"
-    ),
-    filter = !is.na(AVISIT)
-  )
+      mode = "first"),
+    filter = !is.na(AVISIT))
 
 # Adding labels and selecting required variables from metadata
 adadas<-adad_4 %>%

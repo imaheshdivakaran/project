@@ -5,6 +5,8 @@
 # Author: Bimal Thomas
 #
 # Input: adsl, ae
+#
+# Date: 16-02-2023
 
 # Adding required libraries
 library(haven)
@@ -59,13 +61,9 @@ adae_1 <-derive_vars_merged(dataset = ae,
 
 # Deriving Treatment variables
   mutate(TRTA=TRT01A,TRTAN=TRT01AN,
-         # RACEN=case_match(RACE,"AMERICAN INDIAN OR ALASKA NATIVE"~1,
-         #                      "ASIAN"~2,
-         #                      "BLACK OR AFRICAN AMERICAN"~3,
-         #                      "NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER"~5,
-         #                      "WHITE"~6,
-         #                      .default =NA),
          ADURU=ifelse(ADURU=="DAYS","DAY","")) %>%
+  select(-RACEN) %>%
+  create_var_from_codelist(adae_spec, "RACE", RACEN) %>%
 
 # Deriving Treatment Emergent Flag
   derive_var_trtemfl(
