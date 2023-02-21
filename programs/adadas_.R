@@ -1,12 +1,9 @@
-# Name: ADADAS
-#
-# Label: ADAS-Cog Analysis
-#
-# Author: Bimal Thomas
-#
-# Input: adsl, qs
-#
-# Date: 21-02-2023
+###########################################################################
+#' developers : Bimal Thomas
+#' date: 21FEB2023
+#' modification History:
+#' program ADADAS
+###########################################################################
 
 # Adding required libraries
 library(dplyr)
@@ -49,15 +46,8 @@ adad_1 <-derive_vars_merged(dataset = qs,
                  source_vars = vars(ADT)) %>%
   mutate(PARAMCD=trimws(QSTESTCD),
          PARAM=trimws(QSTEST) %>% str_to_title(),
-         PARAMN=case_match(PARAMCD,"ACITM01"~1,"ACITM02"~2,"ACITM03"~3,"ACITM04"~4,
-                           "ACITM05"~5,"ACITM06"~6,"ACITM07"~7,"ACITM08"~8,"ACITM09"~9,
-                           "ACITM10"~10,"ACITM11"~11,"ACITM12"~12,"ACITM13"~13,"ACITM14"~14,
-                           "ACTOT"~15,.default = NA),
-         AVISIT = case_when(ADY <= 1 ~ "Baseline",ADY >= 2 & ADY <= 84 ~ "Week 8",
-                            ADY >= 85 & ADY <= 140 ~ "Week 16",ADY > 140 ~ "Week 24",
-                            TRUE ~ NA_character_),
-         AVISITN=case_match(AVISIT,"Baseline"~0,"Week 8"~8,"Week 16"~16,"Week 24"~24,
-                            .default = NA),
+         AVISIT = ifelse(ADY <= 1,"Baseline",ifelse(ADY >= 2 & ADY <= 84,"Week 8",
+                          ifelse(ADY >= 85 & ADY <= 140,"Week 16",ifelse(ADY > 140,"Week 24",NA)))),
          AVAL=QSSTRESN,
          ABLFL=QSBLFL) %>%
   derive_var_base(by_vars = vars(STUDYID, USUBJID, PARAMCD),
@@ -65,11 +55,33 @@ adad_1 <-derive_vars_merged(dataset = qs,
                   new_var = BASE) %>%
   derive_var_chg() %>%
   derive_var_pchg() %>%
+  create_var_from_codelist(adadas_spec, AVISIT, AVISITN) %>%
+  mutate(TRTP=TRT01P,
+         TRTPN=TRT01PN)
 
-  ad_test <- adad_1 %>%
-  create_var_from_codelist(adadas_spec, AVISIT, AVISITN)
+#Creating lookup_data for PARAM and PARAMN
+adad_param <- tibble::tribble(
+  ~PARAMCD, ~PARAMN,
+  "ACITM01",1,
+  "ACITM02",2,
+  "ACITM03",3,
+  "ACITM04",4,
+  "ACITM05",5,
+  "ACITM06",6,
+  "ACITM07",7,
+  "ACITM08",8,
+  "ACITM09",9,
+  "ACITM10",10,
+  "ACITM11",11,
+  "ACITM12",12,
+  "ACITM13",13,
+  "ACITM14",14,
+  "ACTOT",15)
 
-  create_var_from_codelist(adad_1,adadas_spec, PARAM, PARAMN,decode_to_code = TRUE)
+# Merge with lookup dataset
+adad_2 <- derive_vars_merged(dataset=adad_1,
+                             dataset_add =adad_param,
+                             by_vars = vars(PARAMCD))
 
 # creating all dataset with paramcd "ACTOT" with all combination of AVISIT
 adadas_expected_obsv <- tibble::tribble(
@@ -80,10 +92,11 @@ adadas_expected_obsv <- tibble::tribble(
   "ACTOT",24,"Week 24")
 
 # Deriving LOCF records
-adad_2 <- adad_1 %>%
+adad_3 <- adad_1 %>%
   derive_locf_records(dataset_expected_obs = adadas_expected_obsv,
-                      by_vars = vars(STUDYID, USUBJID, PARAMCD),
+                      by_vars = vars(STUDYID,USUBJID,PARAMCD),
                       order = vars(AVISITN, AVISIT))
+
 
 ## derive AWRANGE/AWTARGET/AWTDIFF/AWLO/AWHI/AWU as per SAP
 aw_vars <- tribble(
@@ -94,13 +107,13 @@ aw_vars <- tribble(
   "Week 24", ">140", 168, 141, NA_integer_)
 
 # merging
-adad_3 <- derive_vars_merged(dataset=adad_2,
+adad_4 <- derive_vars_merged(dataset=adad_3,
                              dataset_add = aw_vars,
                              by_vars = vars(AVISIT)) %>%
   mutate(AWTDIFF = abs(AWTARGET - ADY),AWU = "DAYS")
 
 ## ANL01FL
-adad_4 <- adad_3 %>%
+adad_5 <- adad_4 %>%
   mutate(diff = AWTARGET - ADY) %>%
   restrict_derivation(
     derivation = derive_var_extreme_flag,
@@ -109,10 +122,11 @@ adad_4 <- adad_3 %>%
       order = vars(AWTDIFF, diff),
       new_var = ANL01FL,
       mode = "first"),
-    filter = !is.na(AVISIT))
+    filter = !is.na(AVISIT)) %>%
+  arrange(USUBJID, PARAMCD, AVISIT, ADT)
 
 # Adding labels and selecting required variables from metadata
-adadas<-adad_4 %>%
+adadas<-adad_5 %>%
   # only keep vars from define
   drop_unspec_vars(adadas_spec) %>%
   # order columns based on define

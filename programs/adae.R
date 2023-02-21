@@ -1,12 +1,9 @@
-# Name: ADAE
-#
-# Label: Adverse Events Analysis Dataset
-#
-# Author: Bimal Thomas
-#
-# Input: adsl, ae
-#
-# Date: 16-02-2023
+###########################################################################
+#' developers : Bimal Thomas
+#' date: 16FEB2023
+#' modification History:
+#' program ADAE
+###########################################################################
 
 # Adding required libraries
 library(haven)
