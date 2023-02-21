@@ -49,15 +49,9 @@ adad_1 <-derive_vars_merged(dataset = qs,
          AVISIT = ifelse(ADY <= 1,"Baseline",ifelse(ADY >= 2 & ADY <= 84,"Week 8",
                           ifelse(ADY >= 85 & ADY <= 140,"Week 16",ifelse(ADY > 140,"Week 24",NA)))),
          AVAL=QSSTRESN,
-         ABLFL=QSBLFL) %>%
-  derive_var_base(by_vars = vars(STUDYID, USUBJID, PARAMCD),
-                  source_var = AVAL,
-                  new_var = BASE) %>%
-  derive_var_chg() %>%
-  derive_var_pchg() %>%
-  create_var_from_codelist(adadas_spec, AVISIT, AVISITN) %>%
-  mutate(TRTP=TRT01P,
-         TRTPN=TRT01PN)
+         TRTP=TRT01P,
+         TRTPN=TRT01PN) %>%
+  create_var_from_codelist(adadas_spec, AVISIT, AVISITN)
 
 #Creating lookup_data for PARAM and PARAMN
 adad_param <- tibble::tribble(
@@ -92,10 +86,18 @@ adadas_expected_obsv <- tibble::tribble(
   "ACTOT",24,"Week 24")
 
 # Deriving LOCF records
-adad_3 <- adad_1 %>%
+adad_3 <- adad_2 %>%
   derive_locf_records(dataset_expected_obs = adadas_expected_obsv,
                       by_vars = vars(STUDYID,USUBJID,PARAMCD),
-                      order = vars(AVISITN, AVISIT))
+                      order = vars(AVISITN, AVISIT)) %>%
+  mutate(ABLFL=QSBLFL) %>%
+  derive_var_base(by_vars = vars(STUDYID, USUBJID, PARAMCD),
+                  source_var = AVAL,
+                  new_var = BASE) %>%
+  # Calculate CHG
+  restrict_derivation(derivation = derive_var_chg,filter = is.na(ABLFL)) %>%
+  # Calculate PCHG
+  restrict_derivation(derivation = derive_var_pchg,filter = is.na(ABLFL))
 
 
 ## derive AWRANGE/AWTARGET/AWTDIFF/AWLO/AWHI/AWU as per SAP
