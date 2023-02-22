@@ -82,8 +82,7 @@ advs <- derive_vars_merged(
       by_vars = vars(STUDYID, USUBJID, BASETYPE, PARAMCD, AVISIT),
       order = vars(ADT, ATPTN, AVAL),
       new_var = ANL01FL,
-      mode = "last"
-    ),
+      mode = "last"),
     filter = !is.na(AVISITN)) %>%
   select(STUDYID,SITEID,USUBJID,AGE,AGEGR1,AGEGR1N,RACE,RACEN,SEX,SAFFL,TRTSDT,
          TRTEDT,TRTP,TRTPN,TRTA,TRTAN,PARAMCD,PARAM,PARAMN,ADT,ADY,ATPTN,ATPT,
@@ -97,9 +96,6 @@ advs %>%
   set_variable_labels(advs_spec) %>% # apply variable labels based on define
   #xportr_type(advs_spec, "ADVS") %>%
   #xportr_length(advs_spec, "ADVS") %>%
-  # unresolved issue in xportr_length due to:
-  # https://github.com/tidyverse/haven/issues/699
-  # no difference found by diffdf after commenting out xportr_length()
   xportr_format(advs_spec$var_spec %>%
                   mutate_at(c("format"), ~ replace_na(., "")), "ADVS") %>%
   xportr_write("adam/advs.xpt",
