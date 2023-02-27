@@ -44,7 +44,7 @@ adsl <- dm %>%
   derive_vars_dtm_to_dt(source_vars = vars(TRTSDTM, TRTEDTM)) %>%
   group_by(SITEID, ARM) %>%
   mutate(size=n(),
-         SITEGR1=ifelse(size<3,"900",SITEID)) %>%
+         SITEGR1=ifelse(size<3|SITEID=="715"|SITEID=="717","900",SITEID)) %>%
   ungroup() %>%
   mutate(ITTFL=ifelse(ARMCD!='',"Y","N"),
          SAFFL=ifelse(ITTFL=="Y"&!is.na(TRTSDT),"Y","N"))
@@ -107,11 +107,30 @@ adsl <- adsl %>%  derive_vars_merged(dataset_add = sv,
                                      filter_add = VISITNUM == 1,
                                      new_vars = vars(VISIT1DT = SVSTDTC))
 
-# # DCDECODE
-# adsl <- adsl %>%  derive_vars_merged( dataset_add = ds,
-#                                     by_vars = vars(STUDYID,USUBJID),
-#                                     filter_add = DSCAT=='DISPOSITION EVENT',
-#                                     new_vars = vars(DCDECOD = DSDECOD))
+# Deriving VISNUMEN from ds dataframe
+ds1 <- ds %>%
+  mutate(VISNUMEN = ifelse(VISITNUM == 13 & (DSTERM == "PROTOCOL COMPLETED" | DSTERM == "ADVERSE EVENT"),12,VISITNUM))
+
+# Deriving DCSREAS
+ds2 <- ds %>%
+  mutate(DCSREAS=ifelse(DSTERM!="PROTOCOL ENTRY CRITERIA NOT MET",ifelse(DSDECOD=="ADVERSE EVENT","Adverse Event",
+                                                                  ifelse(DSDECOD=="STUDY TERMINATED BY SPONSOR","Sponsor Decision",
+                                                                  ifelse(DSDECOD=="DEATH","Death",
+                                                                  ifelse(DSDECOD=="WITHDRAWAL BY SUBJECT","Withdrew Consent",
+                                                                  ifelse(DSDECOD=="PHYSICIAN DECISION","Physician Decision",
+                                                                  ifelse(DSDECOD=="PROTOCOL VIOLATION","Protocol Violation",
+                                                                  ifelse(DSDECOD=="LOST TO FOLLOW-UP","Lost to Follow-up",
+                                                                  ifelse(DSDECOD=="LACK OF EFFICACY","Lack of Efficacy",NA)))))))),
+                        ifelse(DSTERM=="PROTOCOL ENTRY CRITERIA NOT MET" & DSDECOD=="PROTOCOL VIOLATION","I/E Not Met",NA))) %>%
+  filter(!is.na(DCSREAS))
+
+# DCDECOD/VISNUMEN/DCSREAS
+adsl <- adsl %>%derive_vars_merged(dataset_add = ds1,
+                                  filter_add = (DSCAT == "DISPOSITION EVENT"),
+                                  new_vars = vars(DCDECOD = DSDECOD, VISNUMEN),
+                                  order = vars(DSDECOD, VISNUMEN, DSTERM),
+                                  mode = "first",
+                                  by_vars = vars(STUDYID, USUBJID))
 
 # EDUCLVL
 adsl <- adsl %>%  derive_vars_merged(dataset_add = sc,
@@ -125,21 +144,6 @@ adsl <- adsl %>% create_var_from_codelist(adsl_spec,RACE, RACEN) %>%
   create_var_from_codelist(adsl_spec,TRT01P, TRT01PN) %>%
   create_var_from_codelist(adsl_spec,TRT01A, TRT01AN)
 
-# Deriving VISNUMEN from ds
-
-ds <- ds %>%
-  mutate(VISNUMEN = case_when(VISITNUM == 13 & DSTERM == "PROTOCOL COMPLETED" ~ 12,
-                              TRUE ~ VISITNUM))
-
-adsl <- adsl %>%
-  derive_vars_merged(
-    dataset_add = ds,
-    filter_add = (DSCAT == "DISPOSITION EVENT"),
-    new_vars = vars(DCDECOD = DSDECOD, VISNUMEN, DCREASCD = DSTERM),
-    order = vars(DSDECOD, VISNUMEN, DSTERM),
-    mode = "first",
-    by_vars = vars(STUDYID, USUBJID)
-  )
 
 # EOSSTT
 format_eosstt <- function(DSDECOD) {
@@ -149,6 +153,7 @@ format_eosstt <- function(DSDECOD) {
             TRUE ~ "ONGOING")
 }
 
+# deriving EOSSTT
 adsl <- adsl %>%
   derive_var_disposition_status(dataset_ds = ds,
                                 new_var = EOSSTT,
@@ -166,7 +171,6 @@ adsl <- adsl %>%
                      by_vars = vars(STUDYID, USUBJID))
 
 # MSSETOT
-
 qs <- qs %>%
   select(USUBJID, QSORRES, QSCAT, VISITNUM)
 
@@ -255,27 +259,34 @@ MMSETOT <- paste(MMSETOT)
 
 qs_adsl <- cbind(USUBJID, MMSETOT, flag_ADASCog, flag_CIBIC)
 
+# MMSETOT
 adsl <- adsl %>%
   derive_vars_merged(
     dataset_add = as.data.frame(qs_adsl),
     new_vars = vars(MMSETOT, flag_ADASCog, flag_CIBIC),
     order = vars(MMSETOT),
     mode = 'first',
-    by_vars = vars(USUBJID)) %>% # Deriving VISIT4DT from sv to derive CUMDOSE
-derive_vars_merged(
-  dataset_add = sv,
-  filter_add = (VISITNUM == 4),
-  new_vars = vars(VISIT4DT = SVSTDTC),
-  order = vars(SVSTDTC),
-  mode = 'first',
-  by_vars = vars(STUDYID, USUBJID)) %>% # Deriving VISIT12DT from sv to derive CUMDOSE
+    by_vars = vars(USUBJID))%>%
+
+# Deriving VISIT4DT from sv to derive CUMDOSE
+  derive_vars_merged(
+    dataset_add = sv,
+    filter_add = (VISITNUM == 4),
+    new_vars = vars(VISIT4DT = SVSTDTC),
+    order = vars(SVSTDTC),
+    mode = 'first',
+    by_vars = vars(STUDYID, USUBJID)) %>%
+
+# Deriving VISIT12DT from sv to derive CUMDOSE
   derive_vars_merged(
     dataset_add = sv,
     filter_add = (VISITNUM == 12),
     new_vars = vars(VISIT12DT = SVSTDTC),
     order = vars(SVSTDTC),
     mode = 'first',
-    by_vars = vars(STUDYID, USUBJID)) %>% # Deriving DURDIS
+    by_vars = vars(STUDYID, USUBJID)) %>%
+
+# Deriving DURDIS
   mutate(VISIT1DT = as.Date(VISIT1DT),
          VISIT4DT = as.Date(VISIT4DT),
          VISIT12DT = as.Date(VISIT12DT),
@@ -283,94 +294,84 @@ derive_vars_merged(
          TRTSDT = as.Date(TRTSDT),
          TRTEDT = as.Date(TRTEDT))
 
-adsl$DURDIS <- compute_duration(
-  adsl$DISONSDT,
-  adsl$VISIT1DT,
-  in_unit = "days",
-  out_unit = "months",
-  floor_in = TRUE,
-  add_one = TRUE,
-  trunc_out = FALSE
-)
+# DURDIS
+adsl$DURDIS <- compute_duration(adsl$DISONSDT,
+                                adsl$VISIT1DT,
+                                in_unit = "days",
+                                out_unit = "months",
+                                floor_in = TRUE,
+                                add_one = TRUE,
+                                trunc_out = FALSE)
 
-
-adsl$TRTDURD <- compute_duration(
-  adsl$TRTSDT,
-  adsl$TRTEDT,
-  in_unit = "days",
-  out_unit = "days",
-  floor_in = TRUE,
-  add_one = TRUE,
-  trunc_out = FALSE
-)
+# TRTDURD
+adsl$TRTDURD <- compute_duration(adsl$TRTSDT,
+                                 adsl$TRTEDT,
+                                 in_unit = "days",
+                                 out_unit = "days",
+                                 floor_in = TRUE,
+                                 add_one = TRUE,
+                                 trunc_out = FALSE)
 
 # Deriving variables used for caluculating CUMDOSE
 
-adsl$Interval_1 <- compute_duration(
-  adsl$TRTSDT,
-  adsl$VISIT4DT,
-  in_unit = "days",
-  out_unit = "days",
-  floor_in = TRUE,
-  add_one = TRUE,
-  trunc_out = FALSE
-)
+# Duration of b/w TRTSDT & VISIT4DT
+adsl$Interval_1 <- compute_duration(adsl$TRTSDT,
+                                    adsl$VISIT4DT,
+                                    in_unit = "days",
+                                    out_unit = "days",
+                                    floor_in = TRUE,
+                                    add_one = TRUE,
+                                    trunc_out = FALSE)
 
-adsl$Interval_1_Discontinued <- compute_duration(
-  adsl$TRTSDT,
-  adsl$TRTEDT,
-  in_unit = "days",
-  out_unit = "days",
-  floor_in = TRUE,
-  add_one = TRUE,
-  trunc_out = FALSE
-)
+# Duration of b/w TRTSDT & TRTEDT
+adsl$Interval_1_Discontinued <- compute_duration(adsl$TRTSDT,
+                                                 adsl$TRTEDT,
+                                                 in_unit = "days",
+                                                 out_unit = "days",
+                                                 floor_in = TRUE,
+                                                 add_one = TRUE,
+                                                 trunc_out = FALSE)
 
-adsl$Interval_2 <- compute_duration(
-  adsl$VISIT4DT,
-  adsl$VISIT12DT,
-  in_unit = "days",
-  out_unit = "days",
-  floor_in = TRUE,
-  add_one = FALSE,
-  trunc_out = FALSE
-)
+# Duration of b/w VISIT4DT & VISIT12DT
+adsl$Interval_2 <- compute_duration(adsl$VISIT4DT,
+                                    adsl$VISIT12DT,
+                                    in_unit = "days",
+                                    out_unit = "days",
+                                    floor_in = TRUE,
+                                    add_one = FALSE,
+                                    trunc_out = FALSE)
 
-adsl$Interval_3 <- compute_duration(
-  adsl$VISIT12DT,
-  adsl$TRTEDT,
-  in_unit = "days",
-  out_unit = "days",
-  floor_in = TRUE,
-  add_one = FALSE,
-  trunc_out = FALSE
-)
+# Duration of b/w VISIT4DT & VISIT12DT
+adsl$Interval_3 <- compute_duration(adsl$VISIT12DT,
+                                    adsl$TRTEDT,
+                                    in_unit = "days",
+                                    out_unit = "days",
+                                    floor_in = TRUE,
+                                    add_one = FALSE,
+                                    trunc_out = FALSE)
 
-adsl$Interval_2_Discontinued <- compute_duration(
-  adsl$VISIT4DT,
-  adsl$TRTEDT,
-  in_unit = "days",
-  out_unit = "days",
-  floor_in = TRUE,
-  add_one = FALSE,
-  trunc_out = FALSE
-)
+# Duration of b/w VISIT4DT & TRTEDT
+adsl$Interval_2_Discontinued <- compute_duration(adsl$VISIT4DT,
+                                                 adsl$TRTEDT,
+                                                 in_unit = "days",
+                                                 out_unit = "days",
+                                                 floor_in = TRUE,
+                                                 add_one = FALSE,
+                                                 trunc_out = FALSE)
 
-# DCSREAS
-adsl <- adsl %>%
-  derive_vars_disposition_reason(
-    dataset_ds = ds,
-    new_var = DCSREAS,
-    reason_var = DSDECOD,
-    new_var_spe = DCSREASP,
-    reason_var_spe = DSTERM,
-    filter_ds = DSCAT == "DISPOSITION EVENT" & DSDECOD != "SCREEN FAILURE"
-  )
+# # DCSREAS
+# adsl <- adsl %>%
+#   derive_vars_disposition_reason(dataset_ds = ds,
+#                                  new_var = DCSREAS,
+#                                  reason_var = DSDECOD,
+#                                  new_var_spe = DCSREASP,
+#                                  reason_var_spe = DSTERM,
+#                                  filter_ds = DSCAT == "DISPOSITION EVENT" & DSDECOD != "SCREEN FAILURE")
 
 adsl <- adsl %>%
-  mutate( ARMN = case_when(ARM == "Placebo" ~ 0,
-                           ARM == "Xanomeline Low Dose" ~ 1,
-                           ARM == "Xanomeline High Dose" ~ 2),
+  mutate( ARMN = ifelse(ARM == "Placebo",0,
+                 ifelse(ARM == "Xanomeline Low Dose",1,
+                 ifelse(ARM == "Xanomeline High Dose",2,NA))),
           CUMDOSE = case_when(ARMN == 0 ~ 0,
                              ARMN == 1 ~ TRT01PN * TRTDURD,
                              ARMN == 2 ~ case_when(VISNUMEN > 3 & VISNUMEN <= 4 ~ case_when(EOSSTT == "COMPLETED" ~ 54 * Interval_1,
@@ -379,12 +380,11 @@ adsl <- adsl %>%
                                                                                              EOSSTT == "DISCONTINUED" ~ 54 * Interval_1 + 81 * Interval_2_Discontinued),
                                                    VISNUMEN > 12 ~ 54 * Interval_1 + 81 * Interval_2 + 54 * Interval_3)),
          AVGDD = CUMDOSE / TRTDURD,
-         DISCONFL = case_when(DCREASCD == "PROTOCOL COMPLETED" ~ 'Y'),
-         DSRAEFL = case_when(DCREASCD == "ADVERSE EVENT" ~ 'Y'),
-         DURDSGR1 = case_when(DURDIS < 12 ~ "<12",
-                              DURDIS >= 12 ~ ">=12"),
-         EFFFL = case_when(SAFFL == 'Y' & flag_ADASCog == 'Y' & flag_CIBIC == 'Y' ~ 'Y',
-                           TRUE ~ 'N'),
+         DISCONFL = ifelse(DCSREAS == "PROTOCOL COMPLETED",'Y',NA),
+         DSRAEFL = ifelse(DCSREAS == "ADVERSE EVENT",'Y',NA),
+         DURDSGR1 = ifelse(DURDIS < 12,"<12",
+                    ifelse(DURDIS >= 12,">=12",NA)),
+         EFFFL = ifelse(SAFFL == 'Y' & flag_ADASCog == 'Y' & flag_CIBIC == 'Y','Y','N'),
          RFENDT = format(as.Date(RFENDTC), "%d-%b-%Y"),
          RFSTDTC = format(as.Date(RFSTDTC), "%d-%b-%Y"),
          RFENDTC = format(as.Date(RFENDTC), "%d-%b-%Y"),
@@ -405,9 +405,8 @@ adsl<-adsl %>%
   # apply variable labels based on define
   set_variable_labels(adsl_spec) %>%
   # Creating .XPT and adding dataset Label
-  xportr_write("adam/adsl.xpt",label = "Subject-Level Analysis Dataset")
+  xportr_write("adam/adsldev.xpt",label = "Subject-Level Analysis Dataset")
 
-names(adsl)
 
 
 
