@@ -13,6 +13,7 @@ library(metacore)
 library(metatools)
 library(stringr)
 library(xportr)
+library(haven)
 
 dm <- read_xpt("sdtm/dm.xpt")
 ds <- read_xpt("sdtm/ds.xpt")
@@ -91,14 +92,17 @@ adsl <- adsl %>%  derive_vars_merged( dataset_add = vs,
 adsl <- adsl %>%  derive_vars_merged( dataset_add = vs,
                                     by_vars = vars(STUDYID,USUBJID),
                                     filter_add = (VSTESTCD=='WEIGHT' & VISITNUM == 3),
-                                    new_vars = vars(WEIGHTBL = VSSTRESN))
+                                    new_vars = vars(WEIGHTBL = VSSTRESN)) %>%
+  mutate(HEIGHTBL=round(HEIGHTBL,digits = 1),
+         WEIGHTBL=round(WEIGHTBL,digits = 1))
 
 # BMIBL
 adsl <- adsl %>%  mutate(BMIBL = compute_bmi(HEIGHTBL, WEIGHTBL))
 
 # BMIBLGR1/AGEGR1
-adsl <- adsl %>%  create_cat_var(adsl_spec, BMIBL, BMIBLGR1) %>%
-  create_cat_var(adsl_spec, AGE, AGEGR1)
+adsl <- adsl %>%
+  create_cat_var(adsl_spec, AGE, AGEGR1) %>%
+  create_cat_var(adsl_spec, BMIBL, BMIBLGR1)
 
 # # for COMP16FL
 # sv_16 <- sv %>%
@@ -578,7 +582,7 @@ adsl <- adsl %>%
                                                                                              EOSSTT == "DISCONTINUED" ~ 54 * Interval_1 + 81 * Interval_2_Discontinued),
                                                    VISNUMEN > 12 ~ 54 * Interval_1 + 81 * Interval_2 + 54 * Interval_3)),
          AVGDD = CUMDOSE / TRTDURD,
-         DISCONFL = ifelse(DCSREAS == "Completed",'Y',NA),
+         DISCONFL = ifelse(DCSREAS != "Completed",'Y',NA),
          DISCONFL=as.character(DISCONFL),
          DSRAEFL = ifelse(DCSREAS == "Adverse Event",'Y',NA),
          DSRAEFL=as.character(DSRAEFL),
@@ -590,8 +594,6 @@ adsl <- adsl %>%
          RFENDTC =as.character(RFENDTC),
          AVGDD=round(AVGDD,digits = 1),
          BMIBL=round(BMIBL,digits = 1),
-         HEIGHTBL=round(HEIGHTBL,digits = 1),
-         WEIGHTBL=round(WEIGHTBL,digits = 1),
          DURDIS=round(DURDIS,digits = 1))
 
 
