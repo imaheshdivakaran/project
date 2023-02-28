@@ -59,8 +59,12 @@ adae_1 <-derive_vars_merged(dataset = ae,
 # Deriving Treatment variables
   mutate(TRTA=TRT01A,TRTAN=TRT01AN,
          ADURU=ifelse(ADURU=="DAYS","DAY","")) %>%
-  select(-RACEN) %>%
-  create_var_from_codelist(adae_spec, "RACE", RACEN) %>%
+  mutate(RACEN=case_when(RACE=="WHITE"~6,
+                         RACE=="NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER"~5,
+                         RACE=="BLACK OR AFRICAN AMERICAN"~3,
+                         RACE=="ASIAN"~2,
+                         RACE=="AMERICAN INDIAN OR ALASKA NATIVE"~1,
+                         TRUE~NA)) %>%
 
 # Deriving Treatment Emergent Flag
   derive_var_trtemfl(
