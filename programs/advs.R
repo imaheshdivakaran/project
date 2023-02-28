@@ -10,13 +10,14 @@
 #Setups
 library(admiral)
 library(dplyr)
+library(stringr)
 library(metacore)
 library(metatools)
 library(xportr)
 
 # Calling datasets
 vs <- haven::read_xpt(file.path("sdtm", "vs.xpt"))
-adsl <- haven::read_xpt(file.path("adam", "adsl.xpt"))
+adsl <- haven::read_xpt(file.path("adam", "adsl.xpt")) %>% select(-RACEN)
 
 # convert blanks to NA
 vs <- convert_blanks_to_na(vs)
@@ -32,6 +33,24 @@ advs_spec <- metacore %>%
 # advs_pred <- build_from_derived(advs_spec,
 #                                   vs_list = list("ADSL" = adsl, "VS" = vs))
 
+# Assign RACEN based on RACE
+race_lookup <- tibble::tribble(
+  ~RACE, ~RACEN,
+  "AMERICAN INDIAN OR ALASKA NATIVE", 6,
+  "ASIAN",                            3,
+  "BLACK OR AFRICAN AMERICAN",        2,
+  "WHITE",                            1)
+
+# Creating PARAM, PARAMCD & PARAMN
+param_lookup <- tibble::tribble(
+  ~VSTEST,                   ~PARAM,
+  "Systolic Blood Pressure", "Systolic Blood Pressure (mmHg)",
+  "Diastolic Blood Pressure","Diastolic Blood Pressure (mmHg)",
+  "Pulse Rate",	             "Pulse Rate (beats/min)",
+  "Weight",	                 "Weight (kg)",
+  "Height",	                 "Height (cm)",
+  "Temperature",	           "Temperature (C)")
+
 # ADVS
 advs <- derive_vars_merged(
   dataset = vs,
@@ -39,6 +58,7 @@ advs <- derive_vars_merged(
   by_vars = vars(STUDYID, USUBJID)) %>%
   # Derive Treatment variables
   mutate(TRTA = TRT01A,
+         ABLFL = VSBLFL,
          TRTP = TRT01P,
          TRTAN = TRT01AN,
          TRTPN = TRT01PN,
@@ -46,15 +66,18 @@ advs <- derive_vars_merged(
          ATPT = VSTPT,
          AVAL = VSSTRESN,
          # AVISIT and AVISITN
-         AVISIT = case_when(
-           str_detect(VISIT, "SCREEN") ~ NA_character_,
-           str_detect(VISIT, "UNSCHED") ~ NA_character_,
-           #str_detect(VISIT, "RETRIEVAL") ~ NA_character_,
-           str_detect(VISIT, "AMBUL") ~ NA_character_,
-           !is.na(VISIT) ~ str_to_title(VISIT)),
          AVISITN = as.numeric(case_when(
            VISIT == "BASELINE" ~ "0",
            str_detect(VISIT, "WEEK") ~ str_trim(str_replace(VISIT, "WEEK", "")))),
+         AVISIT = case_when(
+           str_detect(VISIT, "SCREEN") ~ NA_character_,
+           str_detect(VISIT, "UNSCHED") ~ NA_character_,
+           str_detect(VISIT, "RETRIEVAL") ~ NA_character_,
+           str_detect(VISIT, "AMBUL") ~ NA_character_,
+           is.na(ABLFL) & !is.na(AVISITN) & AVISITN>=4 | AVISITN<=26 ~ "EOT",
+           TRUE ~ str_to_title(VISIT)),
+
+
          PARAMN = as.numeric(case_when(VSTEST == "Systolic Blood Pressure" ~ "1",
                                        VSTEST == "Diastolic Blood Pressure" ~ "2",
                                        VSTEST == "Pulse Rate" ~ "3",
@@ -62,9 +85,8 @@ advs <- derive_vars_merged(
                                        VSTEST == "Height" ~ "5",
                                        VSTEST == "Temperature" ~ "6")) ,
          ATPTN = VSTPTNUM,
-         PARAM = VSTEST,
+         # PARAM = VSTEST,
          PARAMCD = VSTESTCD,
-         ABLFL = VSBLFL,
          AVAL = VSSTRESN,
          BASETYPE = VSTPT) %>%
   # ADT
@@ -76,6 +98,7 @@ advs <- derive_vars_merged(
     new_var = BASE) %>%
   derive_var_chg() %>%
   derive_var_pchg() %>%
+  # ANL01FL
   restrict_derivation(
     derivation = derive_var_extreme_flag,
     args = params(
@@ -84,9 +107,22 @@ advs <- derive_vars_merged(
       new_var = ANL01FL,
       mode = "last"),
     filter = !is.na(AVISITN)) %>%
-  select(STUDYID,SITEID,USUBJID,AGE,AGEGR1,AGEGR1N,RACE,RACEN,SEX,SAFFL,TRTSDT,
-         TRTEDT,TRTP,TRTPN,TRTA,TRTAN,PARAMCD,PARAM,PARAMN,ADT,ADY,ATPTN,ATPT,
+  select(VSTEST,STUDYID,SITEID,USUBJID,AGE,AGEGR1,AGEGR1N,RACE,SEX,SAFFL,TRTSDT,
+         TRTEDT,TRTP,TRTPN,TRTA,TRTAN,PARAMCD,PARAMN,ADT,ADY,ATPTN,ATPT,
          AVISIT,AVISITN,AVAL,BASE,BASETYPE,CHG,PCHG,VISITNUM,VISIT,VSSEQ,ANL01FL,ABLFL)
+
+#creating RACEN
+advs <- advs %>%
+  derive_vars_merged(
+    dataset_add = race_lookup,
+    by_vars = vars(RACE),
+  )
+#Creating PARAM PARAMCD & PARAMN
+advs <- advs %>%
+  derive_vars_merged(
+    dataset_add = param_lookup,
+    by_vars = vars(VSTEST),
+  ) %>% select(-VSTEST)
 
 A  <- advs %>% select(ANL01FL, AVISIT) %>%filter(is.na(AVISIT))
 
