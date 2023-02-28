@@ -59,8 +59,6 @@ adae_1 <-derive_vars_merged(dataset = ae,
 # Deriving Treatment variables
   mutate(TRTA=TRT01A,TRTAN=TRT01AN,
          ADURU=ifelse(ADURU=="DAYS","DAY","")) %>%
-  select(-RACEN) %>%
-  create_var_from_codelist(adae_spec, "RACE", RACEN) %>%
 
 # Deriving Treatment Emergent Flag
   derive_var_trtemfl(
