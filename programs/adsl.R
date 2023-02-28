@@ -39,15 +39,47 @@ adsl <- dm %>%
          TRT01A=TRT01P) %>%
   derive_vars_dtm(dtc = RFSTDTC,
                   new_vars_prefix = "TRTS") %>%
-  derive_vars_dtm(dtc = RFENDTC,
-                  new_vars_prefix = "TRTE") %>%
-  derive_vars_dtm_to_dt(source_vars = vars(TRTSDTM, TRTEDTM)) %>%
+  derive_vars_dtm_to_dt(source_vars = vars(TRTSDTM)) %>%
   group_by(SITEID, ARM) %>%
   mutate(size=n(),
          SITEGR1=ifelse(size<3|SITEID=="715"|SITEID=="717","900",SITEID)) %>%
   ungroup() %>%
   mutate(ITTFL=ifelse(ARMCD!='',"Y","N"),
          SAFFL=ifelse(ITTFL=="Y"&!is.na(TRTSDT),"Y","N"))
+
+# Deriving TRTEDT from ex
+
+ex_dt <- ex %>%
+  derive_vars_dt(
+    new_vars_prefix = "EXEN",
+    dtc = EXENDTC
+  )
+
+ds_dt <- ds %>%
+  derive_vars_dt(
+    new_vars_prefix = "DS",
+    dtc = DSDTC
+  )
+
+
+adsl <-  adsl %>%
+  derive_vars_merged(
+    dataset_add = ex_dt,
+    by_vars = vars(STUDYID, USUBJID),
+    order = vars(EXENDT, EXSEQ),
+    new_vars = vars(TRTEDT = EXENDT),
+    mode = "last",
+    filter_add = EXDOSE > 0 | (EXDOSE == 0 & str_detect(EXTRT, "PLACEBO"))
+  )
+
+adsl <-  adsl %>%
+  derive_vars_merged(
+    dataset_add = ds_dt %>% select(-DOMAIN),
+    by_vars = vars(STUDYID, USUBJID),
+    filter_add = (DSCAT=="DISPOSITION EVENT")
+  ) %>%
+  mutate(TRTEDT=ifelse(is.na(TRTEDT)&VISITNUM>3,as.character(DSDT),as.character(TRTEDT)),
+         TRTEDT=as.POSIXct(TRTEDT,format="%Y-%m-%d",tz="UTC")) %>% select(-DSDECOD)
 
 # HEIGHTBL
 adsl <- adsl %>%  derive_vars_merged( dataset_add = vs,
@@ -68,38 +100,203 @@ adsl <- adsl %>%  mutate(BMIBL = compute_bmi(HEIGHTBL, WEIGHTBL))
 adsl <- adsl %>%  create_cat_var(adsl_spec, BMIBL, BMIBLGR1) %>%
   create_cat_var(adsl_spec, AGE, AGEGR1)
 
-# for COMP16FL
-sv_16 <- sv %>%
-  filter(VISITNUM==10) %>%
-  select(STUDYID,USUBJID,SVSTDTC) %>%
-  rename(COMP16D=SVSTDTC)
+# # for COMP16FL
+# sv_16 <- sv %>%
+#   filter(VISITNUM==10) %>%
+#   select(STUDYID,USUBJID,SVSTDTC) %>%
+#   rename(COMP16D=SVSTDTC)
+#
+# # for COMP24FL
+# sv_24 <- sv %>%
+#   filter(VISITNUM==12) %>%
+#   select(STUDYID,USUBJID,SVSTDTC) %>%
+#   rename(COMP24D=SVSTDTC)
+#
+# # for COMP8FL
+# sv_8 <- sv %>%
+#   filter(VISITNUM==8) %>%
+#   select(STUDYID,USUBJID,SVSTDTC) %>%
+#   rename(COMP8D=SVSTDTC)
+#
+# # COMP16FL/COMP24FL/COMP8FL
+# adsl <- adsl %>% mutate(DATE1=as.POSIXct(RFSTDTC,format="%Y-%m-%d",tz="UTC")) %>%
+#   derive_vars_merged(dataset_add =sv_16,
+#                      by_vars = vars(STUDYID, USUBJID)) %>%
+#   mutate(DATE2=as.POSIXct(COMP16D,format="%Y-%m-%d",tz="UTC"),
+#          COMP16FL=as.character(ifelse(DATE1>=DATE2,"Y","N"))) %>%
+#   derive_vars_merged(dataset_add =sv_24,
+#                      by_vars = vars(STUDYID, USUBJID)) %>%
+#   mutate(DATE2=as.POSIXct(COMP24D,format="%Y-%m-%d",tz="UTC"),
+#          COMP24FL=as.character(ifelse(DATE1>=DATE2,"Y","N"))) %>%
+#   derive_vars_merged(dataset_add =sv_8,
+#                      by_vars = vars(STUDYID, USUBJID)) %>%
+#   mutate(DATE2=as.POSIXct(COMP8D,format="%Y-%m-%d",tz="UTC"),
+#          COMP8FL=as.character(ifelse(DATE1>=DATE2,"Y","N")))
 
-# for COMP24FL
-sv_24 <- sv %>%
-  filter(VISITNUM==12) %>%
-  select(STUDYID,USUBJID,SVSTDTC) %>%
-  rename(COMP24D=SVSTDTC)
+# Creating sv variables to add to the adsl
 
-# for COMP8FL
-sv_8 <- sv %>%
-  filter(VISITNUM==8) %>%
-  select(STUDYID,USUBJID,SVSTDTC) %>%
-  rename(COMP8D=SVSTDTC)
+sv <- sv %>%
+  mutate(COMP16FL = case_when(VISITNUM == 10 & VISITDY >= 70 ~ 'Y',
+                              TRUE ~ 'N'),
+         COMP24FL = case_when(VISITNUM == 12 & VISITDY >= 84 ~ 'Y',
+                              TRUE ~ 'N'),
+         COMP8FL = case_when(VISITNUM == 8 & VISITDY >= 56 ~ 'Y',
+                             TRUE ~ 'N'),
+         TRTSDT = case_when(VISITNUM == 3 ~ SVSTDTC),
+         VISIT1DT = case_when(VISITNUM == 1 ~ SVSTDTC))
 
-# COMP16FL/COMP24FL/COMP8FL
-adsl <- adsl %>% mutate(DATE1=as.POSIXct(RFSTDTC,format="%Y-%m-%dT%H:%M",tz="UTC")) %>%
-  derive_vars_merged(dataset_add =sv_16,
-                     by_vars = vars(STUDYID, USUBJID)) %>%
-  mutate(DATE2=as.POSIXct(COMP16D,format="%Y-%m-%dT%H:%M",tz="UTC"),
-         COMP16FL=ifelse(DATE1>=DATE2),"Y","N") %>%
-  derive_vars_merged(dataset_add =sv_24,
-                     by_vars = vars(STUDYID, USUBJID)) %>%
-  mutate(DATE2=as.POSIXct(COMP24D,format="%Y-%m-%dT%H:%M",tz="UTC"),
-         COMP24FL=ifelse(DATE1>=DATE2),"Y","N") %>%
-  derive_vars_merged(dataset_add =sv_8,
-                     by_vars = vars(STUDYID, USUBJID)) %>%
-  mutate(DATE2=as.POSIXct(COMP8D,format="%Y-%m-%dT%H:%M",tz="UTC"),
-         COMP8FL=ifelse(DATE1>=DATE2),"Y","N")
+# Extracting relevant sv variables
+
+sv_extract <- sv %>%
+  select(USUBJID, COMP16FL, COMP24FL, COMP8FL, TRTSDT, VISIT1DT)
+
+# Initializing columns to add to the adsl
+
+USUBJID = vector("character", 0)
+COMP16FL = vector("character", 0)
+COMP24FL = vector("character", 0)
+COMP8FL = vector("character", 0)
+TRTSDT = vector("character", 0)
+VISIT1DT = vector("character", 0)
+# The Boolean flags ensure that no more than 1 record is added for a subject
+
+COMP16FL_b = FALSE
+COMP24FL_b = FALSE
+COMP8FL_b = FALSE
+TRTSDT_b = FALSE
+VISIT1DT_b = FALSE
+
+# This nested loop goes through every element in the sv data set and extract relevant data
+# i is row and j is column
+
+for(i in 1:nrow(sv_extract))
+{
+  for(j in 1:ncol(sv_extract))
+  {
+    if(i == 1 & j == 1)
+    {
+      subject = sv_extract[i, j]
+      USUBJID <- c(subject)
+
+      COMP16FL_b = FALSE
+      COMP24FL_b = FALSE
+      COMP8FL_b = FALSE
+      TRTSDT_b = FALSE
+      VISIT1DT_b = FALSE
+    }
+
+    if(j == 1 & sv_extract[i, j] != subject)
+    {
+      if(COMP16FL_b == FALSE)
+      {
+        COMP16FL <- c(COMP16FL, 'N')
+      }
+
+      if(COMP24FL_b == FALSE)
+      {
+        COMP24FL <- c(COMP24FL, 'N')
+      }
+
+      if(COMP8FL_b == FALSE)
+      {
+        COMP8FL <- c(COMP8FL, 'N')
+      }
+
+      if(TRTSDT_b == FALSE)
+      {
+        TRTSDT <- c(TRTSDT, NA)
+      }
+
+      if(VISIT1DT_b == FALSE)
+      {
+        VISIT1DT <- c(VISIT1DT, NA)
+      }
+
+      subject = sv_extract[i, j]
+      USUBJID = c(USUBJID, subject)
+
+      COMP16FL_b = FALSE
+      COMP24FL_b = FALSE
+      COMP8FL_b = FALSE
+      TRTSDT_b = FALSE
+      VISIT1DT_b = FALSE
+    }
+
+    if(sv_extract[i, 2] == 'Y' & COMP16FL_b == FALSE)
+    {
+      COMP16FL <- c(COMP16FL, 'Y')
+      COMP16FL_b = TRUE
+    }
+
+    if(sv_extract[i, 3] == 'Y' & COMP24FL_b == FALSE)
+    {
+      COMP24FL <- c(COMP24FL, 'Y')
+      COMP24FL_b = TRUE
+    }
+
+    if(sv_extract[i, 4] == 'Y' & COMP8FL_b == FALSE)
+    {
+      COMP8FL <- c(COMP8FL, 'Y')
+      COMP8FL_b = TRUE
+    }
+
+    if(is.na(sv_extract[i, 5]) == FALSE & TRTSDT_b == FALSE)
+    {
+      TRTSDT <- c(TRTSDT, sv_extract[i, 5])
+      TRTSDT_b = TRUE
+    }
+
+    if(is.na(sv_extract[i, 6]) == FALSE & VISIT1DT_b == FALSE)
+    {
+      VISIT1DT = c(VISIT1DT, sv_extract[i, 6])
+      VISIT1DT_b = TRUE
+    }
+  }
+}
+
+if(COMP16FL_b == FALSE)
+{
+  COMP16FL <- c(COMP16FL, 'N')
+}
+
+if(COMP24FL_b == FALSE)
+{
+  COMP24FL <- c(COMP24FL, 'N')
+}
+
+if(COMP8FL_b == FALSE)
+{
+  COMP8FL <- c(COMP8FL, 'N')
+}
+
+if(TRTSDT_b == FALSE)
+{
+  TRTSDT <- c(TRTSDT, NA)
+}
+
+if(VISIT1DT_b == FALSE)
+{
+  VISIT1DT <- c(VISIT1DT, NA)
+}
+
+# Converting lists in to characters because the adsl columns are characters
+
+USUBJID <- paste(USUBJID)
+TRTSDT <- paste(TRTSDT)
+VISIT1DT <-paste(VISIT1DT)
+
+# Creating the data set to merge with the adsl
+
+sv_adsl <- cbind(USUBJID, COMP16FL, COMP24FL, COMP8FL, TRTSDT, VISIT1DT)
+
+adsl <- adsl %>%
+  derive_vars_merged(
+    dataset_add = as.data.frame(sv_adsl),
+    new_vars = vars(COMP16FL, COMP24FL, COMP8FL),
+    order = vars(COMP16FL, COMP24FL, COMP8FL, TRTSDT),
+    mode = 'first',
+    by_vars = vars(USUBJID)
+  )
 
 # VISIT1DT
 adsl <- adsl %>%  derive_vars_merged(dataset_add = sv,
@@ -124,13 +321,21 @@ ds2 <- ds %>%
                         ifelse(DSTERM=="PROTOCOL ENTRY CRITERIA NOT MET" & DSDECOD=="PROTOCOL VIOLATION","I/E Not Met",NA))) %>%
   filter(!is.na(DCSREAS))
 
-# DCDECOD/VISNUMEN/DCSREAS
+# DCDECOD/VISNUMEN
 adsl <- adsl %>%derive_vars_merged(dataset_add = ds1,
                                   filter_add = (DSCAT == "DISPOSITION EVENT"),
                                   new_vars = vars(DCDECOD = DSDECOD, VISNUMEN),
                                   order = vars(DSDECOD, VISNUMEN, DSTERM),
                                   mode = "first",
                                   by_vars = vars(STUDYID, USUBJID))
+
+# DCSREAS
+adsl <- adsl %>%derive_vars_merged(dataset_add = ds2,
+                                   filter_add = (DSCAT == "DISPOSITION EVENT"),
+                                   new_vars = vars(DCSREAS=DCSREAS),
+                                   mode = "first",
+                                   by_vars = vars(STUDYID, USUBJID))
+
 
 # EDUCLVL
 adsl <- adsl %>%  derive_vars_merged(dataset_add = sc,
@@ -267,6 +472,7 @@ adsl <- adsl %>%
     order = vars(MMSETOT),
     mode = 'first',
     by_vars = vars(USUBJID))%>%
+  mutate(MMSETOT=as.numeric(MMSETOT)) %>%
 
 # Deriving VISIT4DT from sv to derive CUMDOSE
   derive_vars_merged(
@@ -359,17 +565,9 @@ adsl$Interval_2_Discontinued <- compute_duration(adsl$VISIT4DT,
                                                  add_one = FALSE,
                                                  trunc_out = FALSE)
 
-# # DCSREAS
-# adsl <- adsl %>%
-#   derive_vars_disposition_reason(dataset_ds = ds,
-#                                  new_var = DCSREAS,
-#                                  reason_var = DSDECOD,
-#                                  new_var_spe = DCSREASP,
-#                                  reason_var_spe = DSTERM,
-#                                  filter_ds = DSCAT == "DISPOSITION EVENT" & DSDECOD != "SCREEN FAILURE")
 
 adsl <- adsl %>%
-  mutate( ARMN = ifelse(ARM == "Placebo",0,
+  mutate(ARMN = ifelse(ARM == "Placebo",0,
                  ifelse(ARM == "Xanomeline Low Dose",1,
                  ifelse(ARM == "Xanomeline High Dose",2,NA))),
           CUMDOSE = case_when(ARMN == 0 ~ 0,
@@ -380,20 +578,21 @@ adsl <- adsl %>%
                                                                                              EOSSTT == "DISCONTINUED" ~ 54 * Interval_1 + 81 * Interval_2_Discontinued),
                                                    VISNUMEN > 12 ~ 54 * Interval_1 + 81 * Interval_2 + 54 * Interval_3)),
          AVGDD = CUMDOSE / TRTDURD,
-         DISCONFL = ifelse(DCSREAS == "PROTOCOL COMPLETED",'Y',NA),
-         DSRAEFL = ifelse(DCSREAS == "ADVERSE EVENT",'Y',NA),
+         DISCONFL = ifelse(DCSREAS == "Completed",'Y',NA),
+         DISCONFL=as.character(DISCONFL),
+         DSRAEFL = ifelse(DCSREAS == "Adverse Event",'Y',NA),
+         DSRAEFL=as.character(DSRAEFL),
          DURDSGR1 = ifelse(DURDIS < 12,"<12",
                     ifelse(DURDIS >= 12,">=12",NA)),
          EFFFL = ifelse(SAFFL == 'Y' & flag_ADASCog == 'Y' & flag_CIBIC == 'Y','Y','N'),
-         RFENDT = format(as.Date(RFENDTC), "%d-%b-%Y"),
-         RFSTDTC = format(as.Date(RFSTDTC), "%d-%b-%Y"),
-         RFENDTC = format(as.Date(RFENDTC), "%d-%b-%Y"),
-         TRTSDT = format(as.Date(TRTSDT), "%d-%b-%Y"),
-         TRTEDT = format(as.Date(TRTEDT), "%d-%b-%Y"),
-         VISIT1DT = format(as.Date(VISIT1DT), "%d-%b-%Y"),
-         VISIT4DT = format(as.Date(VISIT4DT), "%d-%b-%Y"),
-         VISIT12DT = format(as.Date(VISIT12DT), "%d-%b-%Y"),
-         DISONSDT = format(as.Date(DISONSDT), "%d-%b-%Y"))
+         RFENDT = as.Date(RFENDTC),
+         RFSTDTC = as.character(RFSTDTC),
+         RFENDTC =as.character(RFENDTC),
+         AVGDD=round(AVGDD,digits = 1),
+         BMIBL=round(BMIBL,digits = 1),
+         HEIGHTBL=round(HEIGHTBL,digits = 1),
+         WEIGHTBL=round(WEIGHTBL,digits = 1),
+         DURDIS=round(DURDIS,digits = 1))
 
 
 # Adding labels and selecting required variables from metadata
@@ -405,7 +604,7 @@ adsl<-adsl %>%
   # apply variable labels based on define
   set_variable_labels(adsl_spec) %>%
   # Creating .XPT and adding dataset Label
-  xportr_write("adam/adsldev.xpt",label = "Subject-Level Analysis Dataset")
+  xportr_write("adam/adsl.xpt",label = "Subject-Level Analysis Dataset")
 
 
 
