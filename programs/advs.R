@@ -52,7 +52,7 @@ param_lookup <- tibble::tribble(
   "Temperature",	           "Temperature (C)")
 
 # ADVS
-advs <- derive_vars_merged(
+advs_ <- derive_vars_merged(
   dataset = vs,
   dataset_add = adsl,
   by_vars = vars(STUDYID, USUBJID)) %>%
@@ -74,7 +74,7 @@ advs <- derive_vars_merged(
            str_detect(VISIT, "UNSCHED") ~ NA_character_,
            str_detect(VISIT, "RETRIEVAL") ~ NA_character_,
            str_detect(VISIT, "AMBUL") ~ NA_character_,
-           is.na(ABLFL) & !is.na(AVISITN) & AVISITN>=4 | AVISITN<=26 ~ "EOT",
+           is.na(ABLFL) & !is.na(AVISITN) & AVISITN>=4 | AVISITN<=26 ~ "End of Treatment",
            TRUE ~ str_to_title(VISIT)),
 
 
@@ -85,7 +85,6 @@ advs <- derive_vars_merged(
                                        VSTEST == "Height" ~ "5",
                                        VSTEST == "Temperature" ~ "6")) ,
          ATPTN = VSTPTNUM,
-         # PARAM = VSTEST,
          PARAMCD = VSTESTCD,
          AVAL = VSSTRESN,
          BASETYPE = VSTPT) %>%
@@ -112,26 +111,23 @@ advs <- derive_vars_merged(
          AVISIT,AVISITN,AVAL,BASE,BASETYPE,CHG,PCHG,VISITNUM,VISIT,VSSEQ,ANL01FL,ABLFL)
 
 #creating RACEN
-advs <- advs %>%
+advs1 <- advs_ %>%
   derive_vars_merged(
     dataset_add = race_lookup,
-    by_vars = vars(RACE),
-  )
+    by_vars = vars(RACE))
 #Creating PARAM PARAMCD & PARAMN
-advs <- advs %>%
+advs <- advs1 %>%
   derive_vars_merged(
     dataset_add = param_lookup,
     by_vars = vars(VSTEST),
   ) %>% select(-VSTEST)
 
-A  <- advs %>% select(ANL01FL, AVISIT) %>%filter(is.na(AVISIT))
 
 advs %>%
+  # arrange(USUBJID, PARAMCD, AVISIT, ATPT) %>%
   drop_unspec_vars(advs_spec) %>% # only keep vars from define
   order_cols(advs_spec) %>% # order columns based on define
   set_variable_labels(advs_spec) %>% # apply variable labels based on define
-  #xportr_type(advs_spec, "ADVS") %>%
-  #xportr_length(advs_spec, "ADVS") %>%
   xportr_format(advs_spec$var_spec %>%
                   mutate_at(c("format"), ~ replace_na(., "")), "ADVS") %>%
   xportr_write("adam/advs.xpt",

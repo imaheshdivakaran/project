@@ -37,7 +37,7 @@ race_lookup <- tibble::tribble(
   "WHITE",                            1)
 
 #ADLBH
-adlbh1 <- derive_vars_merged(
+adlbh <- derive_vars_merged(
   dataset = lb,
   dataset_add = adsl,
   by_vars = vars(STUDYID, USUBJID)) %>%
@@ -49,22 +49,21 @@ adlbh1 <- derive_vars_merged(
          ADY = LBDY,
          AVAL = LBSTRESN,
          A1HI =LBSTNRHI,
-         A1LO = VISITNUM,
-         ABLFL = if_else(!is.na(LBBLFL),LBBLFL,NA),
-         ANRIND = VISITNUM,
-         BNRIND = VISITNUM,
+         A1LO = LBSTNRLO,
+         PARCAT1 = "HEM",
+         ABLFL = ifelse(!is.na(LBBLFL),LBBLFL,NA),
          # AVISIT and AVISITN
          AVISITN = as.numeric(case_when(
            VISIT == "BASELINE" ~ "0",
            str_detect(VISIT, "WEEK") ~ str_trim(str_replace(VISIT, "WEEK", "")))),
-
+        # AVISIT
          AVISIT = case_when(
            str_detect(VISIT, "SCREEN") ~ NA_character_,
            str_detect(VISIT, "UNSCHED") ~ NA_character_,
-           #str_detect(VISIT, "RETRIEVAL") ~ NA_character_,
+           str_detect(VISIT, "RETRIEVAL") ~ NA_character_,
            str_detect(VISIT, "AMBUL") ~ NA_character_,
-           is.na(ABLFL) & !is.na(AVISITN) & AVISITN>=4 | AVISITN<=24 ~ "End Of Treatment",
-           TRUE ~ str_to_title(VISIT)),
+           is.na(ABLFL) & AVISITN>24 ~ "End Of Treatment",
+           AVISITN<24 ~ str_to_title(VISIT)),
 
          PARAMN = as.numeric(case_when(LBTEST == "Anisocytes"~"1",
                                        LBTEST == "Basophils (GI/L)	"~"2",
@@ -83,7 +82,9 @@ adlbh1 <- derive_vars_merged(
                                        LBTEST == "Polychromasia"~"15",
                                        LBTEST == "Erythrocytes (TI/L)"~"16",
                                        LBTEST == "Leukocytes (GI/L)"~"17")) ,
-         PARAM = LBTEST,
+         PARAM = case_when (PARAMN<100 ~ paste0(LBTEST,"",LBSTRESU),
+                            PARAMN>100 ~ paste0(LBTEST,"",LBSTRESU,"","change from previous visit, relative to normal range"),
+                            TRUE ~ ""),
          ALBTRVAL = LBSTRESN,
          PARAMCD = LBTESTCD) %>%
   # ADT
@@ -106,17 +107,19 @@ adlbh1 <- derive_vars_merged(
   derive_var_analysis_ratio(
     numer_var = AVAL,
     denom_var = A1HI,
-    new_var = b)
+    new_var = b) %>%
 
-adlbh <- adlbh1 %>%
+derive_var_base(
+  by_vars = vars(STUDYID, USUBJID, PARAMCD),
+  source_var = AVAL,
+  new_var = c) %>%
+
   #BR2A1HI and BR2A1LO
-  BR2A1LO = if_else(ABLFL == "Y",a,NA)
-  BR2A1HI = if_else(ABLFL == "Y",b,NA)
+  mutate(BR2A1LO = ifelse(ABLFL == "Y",a,NA),
+         BR2A1HI = ifelse(ABLFL == "Y",b,NA),
 
   # BASE
-  BASE = if_else(ABLFL == "Y",derive_var_base(
-    by_vars = vars(STUDYID, USUBJID, PARAMCD),
-    source_var = AVAL),NA) %>%
+  BASE = ifelse(ABLFL == "Y",c,NA) )%>%
   #CHG
   derive_var_chg() %>%
   #PCHG
@@ -130,37 +133,50 @@ adlbh <- adlbh1 %>%
       mode = "last"
     ),
     filter = !is.na(AVISITN)) %>%
-  select(LBTEST,STUDYID,SUBJID,USUBJID,TRTP,TRTPN,TRTA,TRTAN,TRTSDT,TRTEDT,AGE,AGEGR1,AGEGR1N,RACE,
+  # ANRIND and BNRIND
+    mutate(ANRIND = case_when((AVAL > (1.5*A1HI)) ~ "H",
+                       (AVAL < (.5*A1LO)) ~ "H",
+                       ((.5*A1LO) < AVAL & AVAL< (1.5*A1HI)) ~"H",
+                       is.na(AVAL) ~ "N",
+                       is.na(A1LO) & is.na(A1HI) & LBNRIND == "ABNORMAL" ~ "H",
+                       TRUE ~ ""),
+
+           BNRIND_D = case_when(BASE > (1.5*A1HI) ~ "H",
+                         BASE > .5*A1LO ~ "L",
+                       .5*A1LO < BASE &  BASE < 1.5*A1HI ~"N",
+                       is.na(BASE) ~ "N",
+                       is.na(BASE) & is.na(A1HI) & LBNRIND == "ABNORMAL" ~ "H",
+                       TRUE ~ ""),
+           BNRIND = ifelse(BNRIND_D == "N" & LBNRIND == "ABNORMAL","H",BNRIND_D),
+           # ALBTRVAL
+           ll=((1.5*LBSTNRHI)-LBSTRESN),
+           UL = (LBSTRESN-(.5*LBSTNRLO)),
+           AENTMTFL = case_when(VISITNUM == 12 ~ "Y",
+                                VISITNUM != 12 & DISCONFL == "Y" ~ "Y"
+                                ))  %>%
+
+  select(STUDYID,SUBJID,USUBJID,TRTP,TRTPN,TRTA,TRTAN,TRTSDT,TRTEDT,AGE,AGEGR1,AGEGR1N,RACE,
          SEX,COMP24FL,DSRAEFL,SAFFL,AVISIT,AVISITN,ADY,ADT,VISIT,VISITNUM,
-         PARAM,PARAMCD,PARAMN,
-         #PARCAT1,
-         AVAL,BASE,CHG,A1LO,A1HI,
-         R2A1LO,R2A1HI,BR2A1LO,BR2A1HI,
-         ANL01FL,
-         #ALBTRVAL,
-         ANRIND,BNRIND,
-         ABLFL,
-         #AENTMTFL,
-         LBSEQ,LBNRIND,LBSTRESN)
+         PARAM,PARAMCD,PARAMN,PARCAT1, AVAL,BASE,CHG,A1LO,A1HI,
+         R2A1LO,R2A1HI,BR2A1LO,BR2A1HI,ANL01FL, ALBTRVAL,ANRIND,BNRIND,ABLFL,
+         AENTMTFL,LBSEQ,LBNRIND,LBSTRESN)
 
-# A  <- lb %>% select(LBTEST) %>% filter(LBTEST == "Anisocytes change from previous visit, relative to normal range")
-
-# B  <- adlbh %>% select(ABLFL) %>% filter(ABLFL == "Y")
-
+#creating RACEN
 adlbh <- adlbh %>%
-    derive_vars_merged(
-      dataset_add = param_lookup,
-      by_vars = vars(LBTEST),
-    ) %>% select(-LBTEST)
+  derive_vars_merged(
+    dataset_add = race_lookup,
+    by_vars = vars(RACE))
+
 
 adlbh %>%
   drop_unspec_vars(adlbh_spec) %>% # only keep vars from define
   order_cols(adlbh_spec) %>% # order columns based on define
   set_variable_labels(adlbh_spec) %>% # apply variable labels based on define
-  #xportr_type(advs_spec, "ADLBH") %>%
-  #xportr_length(advs_spec, "ADLBH") %>%
   xportr_format(adlbh_spec$var_spec %>%
                   mutate_at(c("format"), ~ replace_na(., "")), "ADLBH") %>%
   xportr_write("adam/adlbh.xpt",
                label = "Analysis Dataset Lab Hematology"
   )
+
+
+
