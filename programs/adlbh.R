@@ -1,16 +1,8 @@
-<<<<<<< HEAD
 # ADLBH
 
 ###############################
 # developers : Arya Vijayan   #
 # date: 22Feb2023             #
-=======
-# ADVS
-
-###############################
-# developers : Arya Vijayan   #
-# date: 21Feb2023             #
->>>>>>> f0ef389a24eea9f46c1ff2e6bd141b190e6d5d2f
 # modification History: Nil   #
 # ADLBH program               #
 ###############################
@@ -21,7 +13,6 @@ library(dplyr)
 library(metacore)
 library(metatools)
 library(xportr)
-<<<<<<< HEAD
 
 # placeholder for origin=predecessor, use metatool::build_from_derived()
 metacore <- spec_to_metacore("metadata/specs.xlsx", where_sep_sheet = FALSE)
@@ -82,6 +73,7 @@ adlbh <- derive_vars_merged(
                                        LBTEST == "Erythrocytes (TI/L)"~"16",
                                        LBTEST == "Leukocytes (GI/L)"~"17")) ,
          PARAM = LBTEST,
+         ALBTRVAL = LBSTRESN,
          PARAMCD = LBTESTCD) %>%
   # ADT
   derive_vars_dt(new_vars_prefix = "A", dtc = LBDTC) %>%
@@ -128,7 +120,7 @@ adlbh <- derive_vars_merged(
          PARAM,PARAMCD,PARAMN,
          #PARCAT1,
          AVAL,BASE,CHG,A1LO,A1HI,
-         #R2A1LO,R2A1HI,BR2A1LO,BR2A1HI,
+         R2A1LO,R2A1HI,BR2A1LO,BR2A1HI,
          ANL01FL,
          #ALBTRVAL,
          ANRIND,BNRIND,
@@ -151,5 +143,3 @@ adlbh %>%
   xportr_write("adam/adlbh.xpt",
                label = "Analysis Dataset Lab Hematology"
   )
-=======
->>>>>>> f0ef389a24eea9f46c1ff2e6bd141b190e6d5d2f
